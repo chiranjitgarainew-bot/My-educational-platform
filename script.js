@@ -46,6 +46,7 @@ const PRELOADED_USERS = [
         phone: '+91 90000 00000',
         address: 'Admin HQ, EdTech City',
         dob: '1990-01-01',
+        bio: 'Managing the platform content and users.',
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
         enrolledBatches: [], 
         friends: []
@@ -60,6 +61,7 @@ const PRELOADED_USERS = [
         phone: '+91 98765 43210', 
         address: '12/A, College Street, Kolkata', 
         dob: '2008-05-15',
+        bio: 'Class 9 Student aspiring to be an engineer.',
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul',
         enrolledBatches: ['8', '9'], 
         friends: []
@@ -80,47 +82,67 @@ function getGradient(index) {
 }
 
 // ==========================================
-// 3. CUSTOM UI SYSTEM (ALERTS & OFFLINE)
+// 3. CUSTOM UI SYSTEM (ADVANCED ALERTS)
 // ==========================================
 
 const UI = {
-    // Custom Alert Modal
+    // Advanced Alert Modal
     alert(title, message, type = 'success') {
-        const colors = type === 'error' ? 'text-red-600 bg-red-50' : type === 'info' ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50';
-        const icon = type === 'error' ? 'alert-circle' : type === 'info' ? 'info' : 'check-circle';
-        
+        // Theme Configuration based on type
+        const themes = {
+            success: { bg: 'bg-emerald-50', text: 'text-emerald-800', iconBg: 'bg-emerald-100', icon: 'check-circle-2', border: 'border-emerald-200', btn: 'bg-emerald-600 hover:bg-emerald-700' },
+            error:   { bg: 'bg-rose-50',    text: 'text-rose-800',    iconBg: 'bg-rose-100',    icon: 'x-circle',       border: 'border-rose-200',    btn: 'bg-rose-600 hover:bg-rose-700' },
+            info:    { bg: 'bg-blue-50',    text: 'text-blue-800',    iconBg: 'bg-blue-100',    icon: 'info',           border: 'border-blue-200',    btn: 'bg-blue-600 hover:bg-blue-700' },
+            warning: { bg: 'bg-amber-50',   text: 'text-amber-800',   iconBg: 'bg-amber-100',   icon: 'alert-triangle', border: 'border-amber-200',   btn: 'bg-amber-600 hover:bg-amber-700' }
+        };
+        const t = themes[type] || themes.info;
+
         const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in';
+        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in';
         modal.innerHTML = `
-            <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${type === 'error' ? 'from-red-500 to-orange-500' : 'from-indigo-500 to-cyan-500'}"></div>
-                <div class="w-16 h-16 mx-auto mb-4 rounded-full ${colors} flex items-center justify-center shadow-sm">
-                    <i data-lucide="${icon}" width="32"></i>
+            <div class="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up relative overflow-hidden border ${t.border}">
+                <!-- Decorative Background Blob -->
+                <div class="absolute -top-10 -right-10 w-32 h-32 ${t.iconBg} rounded-full blur-3xl opacity-50"></div>
+                
+                <div class="relative z-10 flex flex-col items-center">
+                    <div class="w-20 h-20 mb-4 rounded-full ${t.iconBg} ${t.text} flex items-center justify-center shadow-inner border-4 border-white">
+                        <i data-lucide="${t.icon}" width="40"></i>
+                    </div>
+                    
+                    <h3 class="text-2xl font-black ${t.text} mb-2 text-center tracking-tight">${title}</h3>
+                    <p class="text-center text-slate-500 font-medium text-sm mb-6 leading-relaxed">${message}</p>
+                    
+                    <button id="ui-alert-btn" class="w-full py-4 rounded-xl font-bold text-white ${t.btn} transition shadow-lg transform active:scale-95 flex items-center justify-center gap-2">
+                        <span>Continue</span> <i data-lucide="arrow-right" width="18"></i>
+                    </button>
                 </div>
-                <h3 class="text-xl font-black text-center text-slate-800 mb-2">${title}</h3>
-                <p class="text-center text-slate-500 text-sm mb-6">${message}</p>
-                <button id="ui-alert-btn" class="w-full py-3.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition shadow-lg shadow-slate-200">Okay, Got it</button>
             </div>
         `;
         document.body.appendChild(modal);
         lucide.createIcons();
-        document.getElementById('ui-alert-btn').onclick = () => modal.remove();
+        document.getElementById('ui-alert-btn').onclick = () => {
+            modal.classList.add('opacity-0', 'scale-90'); // Exit animation
+            setTimeout(() => modal.remove(), 200);
+        };
     },
 
-    // Custom Confirm Modal
-    confirm(title, message, onConfirm) {
+    // Advanced Confirm Modal
+    confirm(title, message, onConfirm, type = 'danger') {
+        const isDanger = type === 'danger';
+        const btnClass = isDanger ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200';
+        
         const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in';
+        modal.className = 'fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in';
         modal.innerHTML = `
-            <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up">
-                 <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center animate-bounce">
-                    <i data-lucide="help-circle" width="28"></i>
+            <div class="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up border border-slate-100">
+                 <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center shadow-sm border border-slate-100">
+                    <i data-lucide="help-circle" width="32"></i>
                 </div>
                 <h3 class="text-xl font-black text-center text-slate-800 mb-2">${title}</h3>
-                <p class="text-center text-slate-500 text-sm mb-6">${message}</p>
-                <div class="flex gap-3">
-                    <button id="ui-cancel-btn" class="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-                    <button id="ui-confirm-btn" class="flex-1 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">Confirm</button>
+                <p class="text-center text-slate-500 text-sm mb-8 font-medium">${message}</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="ui-cancel-btn" class="py-3.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
+                    <button id="ui-confirm-btn" class="py-3.5 rounded-xl font-bold text-white ${btnClass} transition shadow-lg">Confirm</button>
                 </div>
             </div>
         `;
@@ -185,14 +207,15 @@ const db = {
         let changed = false;
         PRELOADED_USERS.forEach(u => {
             if (users[u.email]) {
-                const merged = { ...users[u.email], ...u };
-                if (JSON.stringify(users[u.email]) !== JSON.stringify(merged)) { users[u.email] = merged; changed = true; }
+                // Ensure existing users get new fields if they are missing
+                const merged = { ...u, ...users[u.email] }; // Keep user data but ensure structure
+                // Logic flip: We want to keep user edits, but add new structure fields
+                // Actually simpler: just ensure they exist.
+                if(!users[u.email].role) { users[u.email].role = u.role; changed=true; }
             } else { users[u.email] = u; changed = true; }
         });
         if (changed) {
             this._save(KEYS.USERS, users);
-            const session = this.getSession();
-            if (session && users[session.email]) this.setSession(users[session.email]);
         }
     },
 
@@ -534,7 +557,7 @@ function attachLayoutLogic() {
         UI.confirm('Sign Out?', 'Are you sure you want to log out of your account?', () => {
             db.clearSession(); 
             renderApp();
-        });
+        }, 'danger');
     };
 }
 
@@ -690,7 +713,7 @@ function attachPaymentLogic() {
         if(coupon) {
             state.tempPayment = { couponApplied: code, discountAmount: parseInt(coupon.amount) };
             renderApp();
-            UI.alert('Success!', `Coupon Applied! You saved ₹${coupon.amount}`, 'success');
+            UI.alert('Savings Unlocked!', `Coupon Applied! You saved ₹${coupon.amount}`, 'success');
         } else {
             UI.alert('Invalid Coupon', 'This coupon code is not valid.', 'error');
         }
@@ -718,7 +741,7 @@ function attachPaymentLogic() {
             method: 'PhonePe Gateway'
         });
         modal.classList.add('hidden');
-        UI.alert('Request Sent!', 'Your enrollment request has been sent to the admin.', 'success');
+        UI.alert('Request Sent Successfully', 'Your enrollment request has been sent to the admin. You will be notified once approved.', 'success');
         navigate('profile');
     };
 
@@ -738,7 +761,7 @@ function attachPaymentLogic() {
             status: 'pending',
             method: 'Manual UPI'
         });
-        UI.alert('Request Sent!', 'Manual payment request submitted for verification.', 'info');
+        UI.alert('Payment Request Received', 'We have received your manual payment request. Please allow some time for verification.', 'info');
         navigate('profile');
     };
 }
@@ -959,11 +982,20 @@ function pageAdmin() {
     `}`;
 }
 function attachAdminLogic() {
-    window.approvePay = (id) => UI.confirm('Approve Request?', 'Are you sure?', () => { db.approveRequest(id); renderApp(); });
-    window.rejectPay = (id) => UI.confirm('Reject Request?', 'Are you sure?', () => { db.rejectRequest(id); renderApp(); });
+    window.approvePay = (id) => UI.confirm('Approve Request?', 'Are you sure you want to grant access to this student?', () => { 
+        db.approveRequest(id); 
+        renderApp();
+        setTimeout(() => UI.alert('Approved!', 'The student has been successfully enrolled.', 'success'), 300);
+    }, 'success');
+    
+    window.rejectPay = (id) => UI.confirm('Reject Request?', 'This action cannot be undone. Are you sure?', () => { 
+        db.rejectRequest(id); 
+        renderApp(); 
+    }, 'danger');
+    
     const form = document.getElementById('create-coupon-form');
     if(form) form.onsubmit = (e) => { e.preventDefault(); const code = document.getElementById('new-code').value.toUpperCase().trim(); const amount = document.getElementById('new-amount').value; db.saveCoupon({ code, amount }); renderApp(); };
-    window.deleteCoupon = (code) => UI.confirm('Delete Coupon?', 'Cannot be undone.', () => { db.deleteCoupon(code); renderApp(); });
+    window.deleteCoupon = (code) => UI.confirm('Delete Coupon?', 'Cannot be undone.', () => { db.deleteCoupon(code); renderApp(); }, 'danger');
 }
 
 function pageAdminUpload() {
@@ -999,181 +1031,22 @@ function pageEditProfile() {
     const u = state.user;
     return `
     <div class="pb-10">
-        <div class="flex items-center gap-3 mb-6">
-            <button onclick="window.history.back()" class="p-2 bg-white rounded-full border border-gray-200"><i data-lucide="arrow-left"></i></button>
-            <h1 class="text-2xl font-bold">Edit Profile</h1>
+        <div class="flex items-center gap-3 mb-6 sticky top-0 bg-slate-50/90 backdrop-blur z-20 py-2">
+            <button onclick="window.history.back()" class="p-2 bg-white rounded-full border border-gray-200 shadow-sm hover:bg-gray-50"><i data-lucide="arrow-left" width="20"></i></button>
+            <h1 class="text-2xl font-black text-slate-800">Edit Profile</h1>
         </div>
 
-        <form id="edit-profile-form" class="space-y-6">
-            <!-- Avatar Upload -->
+        <form id="edit-profile-form" class="space-y-6 animate-fade-in">
+            <!-- Avatar Upload with Glass effect -->
             <div class="flex flex-col items-center justify-center">
-                <div class="relative group cursor-pointer" id="avatar-container">
-                    <img src="${u.avatar}" id="avatar-preview" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover bg-white">
-                    <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm">
-                        <i data-lucide="camera" class="text-white w-8 h-8"></i>
+                <div class="relative group cursor-pointer w-32 h-32" id="avatar-container">
+                    <img src="${u.avatar}" id="avatar-preview" class="w-full h-full rounded-full border-[6px] border-white shadow-xl object-cover bg-white">
+                    <div class="absolute inset-0 bg-slate-900/40 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300 backdrop-blur-[2px]">
+                        <i data-lucide="camera" class="text-white w-8 h-8 mb-1"></i>
+                        <span class="text-white text-[10px] font-bold uppercase tracking-wide">Change</span>
+                    </div>
+                    <div class="absolute bottom-1 right-1 bg-indigo-600 p-2 rounded-full text-white border-2 border-white shadow-lg">
+                        <i data-lucide="edit-2" width="14"></i>
                     </div>
                 </div>
-                <input type="file" id="avatar-input" accept="image/*" class="hidden">
-                <p class="text-xs text-slate-400 mt-2 font-bold">Tap to change photo</p>
-            </div>
-
-            <!-- Form Fields -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
-                    <input type="text" id="edit-name" value="${u.name}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address (Read-only)</label>
-                    <input type="text" value="${u.email}" disabled class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-500 cursor-not-allowed">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Phone Number</label>
-                    <input type="tel" id="edit-phone" value="${u.phone || ''}" placeholder="+91..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Date of Birth</label>
-                    <input type="date" id="edit-dob" value="${u.dob || ''}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Address</label>
-                    <textarea id="edit-address" rows="3" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">${u.address || ''}</textarea>
-                </div>
-            </div>
-
-            <button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg shadow-xl shadow-slate-200 hover:scale-[1.02] transition">Save Changes</button>
-        </form>
-    </div>`;
-}
-
-function attachEditProfileLogic() {
-    const container = document.getElementById('avatar-container');
-    const input = document.getElementById('avatar-input');
-    const preview = document.getElementById('avatar-preview');
-    const form = document.getElementById('edit-profile-form');
-
-    // Handle Image Upload
-    container.onclick = () => input.click();
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                preview.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    // Handle Save
-    form.onsubmit = (e) => {
-        e.preventDefault();
-        const updatedUser = { ...state.user };
-        
-        updatedUser.name = document.getElementById('edit-name').value;
-        updatedUser.phone = document.getElementById('edit-phone').value;
-        updatedUser.dob = document.getElementById('edit-dob').value;
-        updatedUser.address = document.getElementById('edit-address').value;
-        updatedUser.avatar = preview.src; // Saves Base64 string
-
-        db.saveUser(updatedUser);
-        state.user = updatedUser; // Update local state immediately
-        
-        UI.alert('Profile Updated', 'Your profile details have been saved successfully.', 'success');
-        navigate('profile');
-    };
-}
-
-function pageProfile() {
-    const u = state.user;
-    const logs = db.getUserLogs(u.id); 
-    const getLogIcon = (type) => { switch(type) { case 'LOGIN': return 'log-in'; case 'SIGNUP': return 'user-plus'; case 'PURCHASE_REQUEST': return 'credit-card'; case 'ENROLL_SUCCESS': return 'check-circle'; case 'COMPLETION': return 'award'; default: return 'activity'; } };
-
-    return `
-    <div class="space-y-6 pb-20">
-        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden group">
-            <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-violet-500 to-fuchsia-500 group-hover:scale-105 transition duration-500"></div>
-            <div class="relative z-10 -mt-2"><img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white"></div>
-            <div class="text-center mt-3">
-                <h2 class="text-2xl font-black text-slate-800">${u.name}</h2>
-                <div class="text-slate-500 text-sm font-medium flex items-center justify-center gap-1 mt-1"><i data-lucide="mail" width="14"></i> ${u.email}</div>
-                ${u.phone ? `<div class="text-slate-400 text-xs font-bold flex items-center justify-center gap-1 mt-1"><i data-lucide="phone" width="12"></i> ${u.phone}</div>` : ''}
-                ${u.address ? `<div class="text-slate-400 text-xs font-bold flex items-center justify-center gap-1 mt-1 max-w-xs mx-auto"><i data-lucide="map-pin" width="12"></i> ${u.address}</div>` : ''}
-            </div>
-            
-            <div class="mt-5 flex flex-col items-center gap-3">
-                 <div class="bg-slate-50 px-4 py-2 rounded-xl text-slate-500 font-mono text-xs font-bold tracking-wider flex items-center gap-2 border border-slate-200">
-                    <i data-lucide="hash" width="14"></i> Student ID: ${u.id}
-                 </div>
-                 <div class="flex gap-2">
-                    <button data-link="edit-profile" class="px-5 py-2 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100 flex items-center gap-2 hover:bg-indigo-100 transition"><i data-lucide="edit-2" width="14"></i> Edit Profile</button>
-                    ${u.isVerified ? '<span class="px-4 py-2 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' : '<span class="px-4 py-2 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'}
-                 </div>
-            </div>
-        </div>
-
-        <div>
-            <h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="activity" class="text-indigo-600"></i> Recent Activity</h3>
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden max-h-80 overflow-y-auto">
-                ${logs.length > 0 ? `<div class="divide-y divide-gray-50">
-                    ${logs.map(log => `
-                        <div class="p-4 flex gap-3 hover:bg-gray-50 transition">
-                            <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mt-1 flex-shrink-0">
-                                <i data-lucide="${getLogIcon(log.type)}" width="16"></i>
-                            </div>
-                            <div>
-                                <div class="font-bold text-slate-700 text-sm">${log.description}</div>
-                                <div class="text-[10px] text-gray-400 font-medium">${new Date(log.timestamp).toLocaleString()}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>` : `<div class="p-8 text-center text-gray-400 text-xs font-bold">No activity recorded yet.</div>`}
-            </div>
-        </div>
-        
-        <button onclick="UI.confirm('Sign Out?', 'Are you sure you want to log out?', () => { db.clearSession(); renderApp(); })" class="w-full bg-red-50 text-red-600 font-bold py-4 rounded-xl border border-red-100 hover:bg-red-100 transition flex items-center justify-center gap-2"><i data-lucide="log-out" width="18"></i> Sign Out</button>
-    </div>`;
-}
-window.requestFriend = (id) => { db.addFriend(state.user.id, id); UI.alert('Success', 'Friend added!', 'success'); renderApp(); };
-
-function pageSettings() {
-    const u = state.user;
-    return `
-    <h2 class="text-2xl font-bold mb-6">Settings</h2>
-    
-    <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer" data-link="edit-profile">
-        <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-400 to-cyan-400 p-[2px]">
-            <img src="${u.avatar}" class="w-full h-full rounded-full border-2 border-white object-cover">
-        </div>
-        <div>
-            <h3 class="font-bold text-lg text-slate-800">${u.name}</h3>
-            <p class="text-xs text-gray-500 mb-2">${u.email}</p>
-            <button class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition">Edit Profile</button>
-        </div>
-    </div>
-
-    <div class="space-y-4">
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center">
-            <div><h3 class="font-bold text-slate-800">Push Notifications</h3><p class="text-xs text-gray-400">Receive class updates</p></div>
-            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in"><input type="checkbox" name="toggle" id="toggle" checked class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/><label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-indigo-300 cursor-pointer"></label></div>
-        </div>
-        <button onclick="UI.alert('Email Sent', 'Password reset link sent to email.', 'info')" class="w-full bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center hover:bg-gray-50">
-            <span class="font-bold text-slate-800">Change Password</span><i data-lucide="chevron-right" class="text-gray-400"></i>
-        </button>
-        <button onclick="UI.confirm('Reset App?', 'This will clear all local data and log you out.', () => { localStorage.clear(); window.location.reload(); })" class="w-full bg-red-50 p-5 rounded-2xl border border-red-100 flex justify-between items-center hover:bg-red-100">
-            <span class="font-bold text-red-600">Clear Cache & Reset App</span><i data-lucide="trash-2" class="text-red-400"></i>
-        </button>
-        <div class="text-center text-xs text-gray-300 mt-4 font-mono">v1.6.0 &bull; Build 2024</div>
-    </div>
-    <style>.toggle-checkbox:checked { right: 0; border-color: #68D391; } .toggle-checkbox:checked + .toggle-label { background-color: #68D391; } .toggle-checkbox { right: 0; transition: all 0.3s; }</style>`;
-}
-
-function attachSettingsLogic() {
-    // Logic handled in-line or via navigation
-}
-
-function pageHelp() {
-    return `<h2 class="text-2xl font-bold mb-6">Help Center</h2><div class="space-y-4"><div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg mb-6"><h3 class="font-bold text-lg mb-2">Need Support?</h3><p class="text-sm opacity-90 mb-4">Our team is available 24/7.</p><a href="mailto:support@studyapp.com" class="inline-block bg-white text-indigo-700 px-4 py-2 rounded-lg font-bold text-sm">Contact Support</a></div><h3 class="font-bold text-gray-500 uppercase text-xs tracking-wider px-2">FAQ</h3><div class="bg-white rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-50"><details class="group p-4"><summary class="flex justify-between items-center font-bold cursor-pointer list-none"><span>How to enroll?</span><span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span></summary><p class="text-gray-500 text-sm mt-3 leading-relaxed">Select batch -> Enroll -> Pay via PhonePe or UPI -> Wait for approval.</p></details><details class="group p-4"><summary class="flex justify-between items-center font-bold cursor-pointer list-none"><span>Payment Pending?</span><span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span></summary><p class="text-gray-500 text-sm mt-3 leading-relaxed">Manual payments take 1-2 hours. PhonePe payments are faster.</p></details></div></div>`;
-}
-
-document.addEventListener('DOMContentLoaded', () => { seedData(); renderApp(); });
+                <input type="file" id="avatar-input
