@@ -3,17 +3,13 @@ export interface User {
   name: string;
   email: string;
   avatar?: string;
-  password?: string; // Added for authentication persistence
-  role: 'student' | 'admin'; // Added to distinguish user permissions
-  
-  // Extended Profile Fields
+  password?: string;
+  role: 'student' | 'admin';
   phone?: string;
   dob?: string;
   village?: string;
   address?: string;
   bio?: string;
-  
-  // Settings & Preferences
   username?: string;
   theme?: 'light' | 'dark' | 'system';
   language?: string;
@@ -24,9 +20,7 @@ export interface User {
     marketing: boolean;
   };
   twoFactorEnabled?: boolean;
-  
-  // Educational Data
-  enrolledBatches?: string[]; // IDs of batches user has purchased/joined
+  enrolledBatches?: string[];
 }
 
 export interface EnrollmentRequest {
@@ -37,30 +31,33 @@ export interface EnrollmentRequest {
   batchId: string;
   batchName: string;
   amount: number;
-  transactionId?: string; // For manual verify
+  transactionId?: string;
   timestamp: number;
   status: 'pending' | 'approved' | 'rejected';
 }
 
-export enum RoutePath {
-  HOME = '/',
-  CLASSES = '/classes',
-  CLASS_DETAILS = '/classes/:batchId',
-  PAYMENT = '/payment/:batchId', // New Payment Route
-  BATCH_SUBJECTS = '/batch/:batchId/subjects', // New Subjects Route after payment
-  PURCHASES = '/purchases',
-  COMMUNITY = '/community',
-  PROFILE = '/profile',
-  SETTINGS = '/settings',
-  HELP = '/help',
-  ADMIN = '/admin', // Database view
-  ADMIN_UPLOAD = '/admin/upload', // Class Upload view
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: 'flat' | 'percent';
+  value: number;
+  expiryDate?: string;
+  isActive: boolean;
+}
+
+export interface Chapter {
+  id: string;
+  batchId: string;
+  subject: string;
+  title: string;
+  description?: string;
+  order: number;
 }
 
 export interface ClassBatch {
   id: string;
-  name: string; // e.g., "Class 8"
-  batchName: string; // e.g., "Disha Batch"
+  name: string;
+  batchName: string;
   description: string;
   color: string;
   price: number;
@@ -77,6 +74,7 @@ export interface ClassContent {
   title: string;
   subject: string;
   batchId: string;
+  chapterId?: string; // Linked to Chapter
   videoUrl: string;
   description: string;
   timestamp: number;
@@ -95,4 +93,22 @@ export interface Session {
   location: string;
   lastActive: string;
   current: boolean;
+}
+
+export enum RoutePath {
+  HOME = '/',
+  CLASSES = '/classes',
+  CLASS_DETAILS = '/classes/:batchId',
+  PAYMENT = '/payment/:batchId',
+  BATCH_SUBJECTS = '/batch/:batchId/subjects',
+  SUBJECT_CHAPTERS = '/batch/:batchId/subject/:subjectName', // New
+  CHAPTER_LECTURES = '/batch/:batchId/chapter/:chapterId', // New
+  VIDEO_PLAYER = '/player/:contentId', // New
+  PURCHASES = '/purchases',
+  COMMUNITY = '/community',
+  PROFILE = '/profile',
+  SETTINGS = '/settings',
+  HELP = '/help',
+  ADMIN = '/admin',
+  ADMIN_UPLOAD = '/admin/upload', // Deprecated in UI, merged into Dashboard but kept for routing safety
 }

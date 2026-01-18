@@ -1,155 +1,149 @@
-import { User, ClassContent, EnrollmentRequest } from '../types';
+import { User, ClassContent, EnrollmentRequest, Coupon, Chapter } from '../types';
 
 const DB_KEY = 'study_platform_users_v2';
 const SESSION_KEY = 'study_platform_session_v2';
 const CONTENT_KEY = 'study_platform_content_v2';
 const REQUESTS_KEY = 'study_platform_requests_v2';
-
-/**
- * DATABASE SERVICE LAYER (Client-Side Simulation)
- * 
- * This file allows the app to run in the browser without a real backend.
- * It uses localStorage to save users, classes, and requests.
- */
+const COUPONS_KEY = 'study_platform_coupons_v2';
+const CHAPTERS_KEY = 'study_platform_chapters_v2';
 
 class DatabaseService {
   
-  // --- INTERNAL HELPER METHODS ---
-
-  private _getUsers(): Record<string, User> {
+  // --- INTERNAL HELPERS ---
+  private _getData<T>(key: string, defaultVal: T): T {
     try {
-      const data = localStorage.getItem(DB_KEY);
-      return data ? JSON.parse(data) : {};
-    } catch (error) {
-      console.error("Error reading users from DB", error);
-      return {};
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : defaultVal;
+    } catch {
+      return defaultVal;
     }
   }
 
-  private _saveUsers(users: Record<string, User>): void {
-    try {
-      localStorage.setItem(DB_KEY, JSON.stringify(users));
-    } catch (error) {
-      console.error("Error saving users to DB", error);
-    }
+  private _saveData(key: string, data: any): void {
+    localStorage.setItem(key, JSON.stringify(data));
   }
 
-  private _getContent(): ClassContent[] {
-    try {
-      const data = localStorage.getItem(CONTENT_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      return [];
-    }
-  }
-
-  private _saveContent(content: ClassContent[]): void {
-    localStorage.setItem(CONTENT_KEY, JSON.stringify(content));
-  }
-
-  private _getRequests(): EnrollmentRequest[] {
-    try {
-      const data = localStorage.getItem(REQUESTS_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      return [];
-    }
-  }
-
-  private _saveRequests(requests: EnrollmentRequest[]): void {
-    localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests));
-  }
-
-  // --- USER API METHODS ---
-
+  // --- USER METHODS ---
   async getAllUsers(): Promise<User[]> {
-    const usersMap = this._getUsers();
+    const usersMap = this._getData<Record<string, User>>(DB_KEY, {});
     return Object.values(usersMap);
   }
 
   async getUser(email: string): Promise<User | undefined> {
-    const users = this._getUsers();
+    const users = this._getData<Record<string, User>>(DB_KEY, {});
     return users[email];
   }
 
   async saveUser(user: User): Promise<User> {
-    const users = this._getUsers();
-    
-    // First user becomes ADMIN automatically
-    const isFirstUser = Object.keys(users).length === 0;
-    if (isFirstUser) {
-      user.role = 'admin';
-    }
-
+    const users = this._getData<Record<string, User>>(DB_KEY, {});
+    if (Object.keys(users).length === 0) user.role = 'admin';
     users[user.email] = user;
-    this._saveUsers(users);
+    this._saveData(DB_KEY, users);
     
-    // Update session if needed
     const currentSession = this.getSession();
-    if (currentSession && currentSession.email === user.email) {
-      this.setSession(user);
-    }
-    
+    if (currentSession && currentSession.email === user.email) this.setSession(user);
     return user;
   }
 
-  // --- CONTENT / CLASS API METHODS ---
-
+  // --- CONTENT METHODS ---
   async saveClassContent(content: ClassContent): Promise<void> {
-    const allContent = this._getContent();
-    allContent.unshift(content); // Add new content to top
-    this._saveContent(allContent);
+    const allContent = this._getData<ClassContent[]>(CONTENT_KEY, []);
+    allContent.unshift(content);
+    this._saveData(CONTENT_KEY, allContent);
   }
 
   async deleteClassContent(contentId: string): Promise<void> {
-    const allContent = this._getContent();
-    const filteredContent = allContent.filter(c => c.id !== contentId);
-    this._saveContent(filteredContent);
+    const allContent = this._getData<ClassContent[]>(CONTENT_KEY, []);
+    const filtered = allContent.filter(c => c.id !== contentId);
+    this._saveData(CONTENT_KEY, filtered);
   }
 
   async getAllContent(): Promise<ClassContent[]> {
-    return this._getContent();
+    return this._getData<ClassContent[]>(CONTENT_KEY, []);
   }
 
-  // --- ENROLLMENT REQUEST METHODS ---
+  async getContentById(id: string): Promise<ClassContent | undefined> {
+    const allContent = this._getData<ClassContent[]>(CONTENT_KEY, []);
+    return allContent.find(c => c.id === id);
+  }
 
+  // --- CHAPTER METHODS ---
+  async saveChapter(chapter: Chapter): Promise<void> {
+    const chapters = this._getData<Chapter[]>(CHAPTERS_KEY, []);
+    chapters.push(chapter);
+    this._saveData(CHAPTERS_KEY, chapters);
+  }
+
+  async getChapters(batchId: string, subject: string): Promise<Chapter[]> {
+    const chapters = this._getData<Chapter[]>(CHAPTERS_KEY, []);
+    return chapters.filter(c => c.batchId === batchId && c.subject === subject)
+                   .sort((a, b) => a.order - b.order);
+  }
+  
+  async deleteChapter(chapterId: string): Promise<void> {
+     let chapters = this._getData<Chapter[]>(CHAPTERS_KEY, []);
+     chapters = chapters.filter(c => c.id !== chapterId);
+     this._saveData(CHAPTERS_KEY, chapters);
+     
+     // Optional: Delete content associated with this chapter
+     let content = this._getData<ClassContent[]>(CONTENT_KEY, []);
+     content = content.filter(c => c.chapterId !== chapterId);
+     this._saveData(CONTENT_KEY, content);
+  }
+
+  // --- COUPON METHODS ---
+  async saveCoupon(coupon: Coupon): Promise<void> {
+    const coupons = this._getData<Coupon[]>(COUPONS_KEY, []);
+    coupons.push(coupon);
+    this._saveData(COUPONS_KEY, coupons);
+  }
+
+  async getCoupons(): Promise<Coupon[]> {
+    return this._getData<Coupon[]>(COUPONS_KEY, []);
+  }
+
+  async deleteCoupon(id: string): Promise<void> {
+    const coupons = this._getData<Coupon[]>(COUPONS_KEY, []);
+    this._saveData(COUPONS_KEY, coupons.filter(c => c.id !== id));
+  }
+
+  async validateCoupon(code: string): Promise<Coupon | null> {
+    const coupons = this._getData<Coupon[]>(COUPONS_KEY, []);
+    const coupon = coupons.find(c => c.code.toUpperCase() === code.toUpperCase() && c.isActive);
+    return coupon || null;
+  }
+
+  // --- REQUEST METHODS ---
   async createEnrollmentRequest(request: EnrollmentRequest): Promise<void> {
-    const requests = this._getRequests();
+    const requests = this._getData<EnrollmentRequest[]>(REQUESTS_KEY, []);
     requests.unshift(request);
-    this._saveRequests(requests);
+    this._saveData(REQUESTS_KEY, requests);
   }
 
   async getEnrollmentRequests(): Promise<EnrollmentRequest[]> {
-    return this._getRequests();
+    return this._getData<EnrollmentRequest[]>(REQUESTS_KEY, []);
   }
 
   async approveEnrollment(requestId: string): Promise<boolean> {
-    const requests = this._getRequests();
-    const reqIndex = requests.findIndex(r => r.id === requestId);
+    const requests = this._getData<EnrollmentRequest[]>(REQUESTS_KEY, []);
+    const req = requests.find(r => r.id === requestId);
+    if (!req) return false;
     
-    if (reqIndex === -1) return false;
-    
-    const request = requests[reqIndex];
-    
-    // 1. Update Request Status
-    request.status = 'approved';
-    this._saveRequests(requests);
+    req.status = 'approved';
+    this._saveData(REQUESTS_KEY, requests);
 
-    // 2. Add Batch to User
-    const users = this._getUsers();
-    const user = Object.values(users).find(u => u.id === request.userId);
+    const users = this._getData<Record<string, User>>(DB_KEY, {});
+    const user = Object.values(users).find(u => u.id === req.userId);
     
     if (user) {
-        const currentBatches = user.enrolledBatches || [];
-        if (!currentBatches.includes(request.batchId)) {
-            user.enrolledBatches = [...currentBatches, request.batchId];
-            this._saveUsers(users);
+        user.enrolledBatches = user.enrolledBatches || [];
+        if (!user.enrolledBatches.includes(req.batchId)) {
+            user.enrolledBatches.push(req.batchId);
+            users[user.email] = user;
+            this._saveData(DB_KEY, users);
             
-            // Update session if it's the current user
-            const currentSession = this.getSession();
-            if (currentSession && currentSession.id === user.id) {
-                this.setSession(user);
-            }
+            const session = this.getSession();
+            if (session && session.id === user.id) this.setSession(user);
         }
         return true;
     }
@@ -157,27 +151,21 @@ class DatabaseService {
   }
 
   async rejectEnrollment(requestId: string): Promise<void> {
-    const requests = this._getRequests();
+    const requests = this._getData<EnrollmentRequest[]>(REQUESTS_KEY, []);
     const req = requests.find(r => r.id === requestId);
     if (req) {
         req.status = 'rejected';
-        this._saveRequests(requests);
+        this._saveData(REQUESTS_KEY, requests);
     }
   }
 
-  // --- SESSION MANAGEMENT ---
-
+  // --- SESSION ---
   getSession(): User | null {
-    try {
-      const data = localStorage.getItem(SESSION_KEY);
-      return data ? JSON.parse(data) : null;
-    } catch (e) {
-      return null;
-    }
+    return this._getData<User | null>(SESSION_KEY, null);
   }
 
   setSession(user: User): void {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    this._saveData(SESSION_KEY, user);
   }
 
   clearSession(): void {

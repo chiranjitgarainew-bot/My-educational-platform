@@ -7,15 +7,16 @@ import Classes from './pages/Classes';
 import BatchDetails from './pages/BatchDetails';
 import Payment from './pages/Payment';
 import BatchSubjects from './pages/BatchSubjects';
+import SubjectChapters from './pages/SubjectChapters';
+import ChapterLectures from './pages/ChapterLectures';
+import VideoPlayer from './pages/VideoPlayer';
 import Help from './pages/Help';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminUpload from './pages/AdminUpload';
 import { User, RoutePath } from './types';
 import { userDb } from './services/db';
 
-// Placeholder components for routes not fully implemented
 const PlaceholderPage = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
     <div className="bg-blue-50 p-6 rounded-full mb-4">
@@ -31,7 +32,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for persisted login via Database Service
     const sessionUser = userDb.getSession();
     if (sessionUser) {
       setUser(sessionUser);
@@ -49,9 +49,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = (updatedUser: User) => {
-    // Update State (Optimistic update)
     setUser(updatedUser);
-    // Update Database
     userDb.saveUser(updatedUser);
   };
 
@@ -70,16 +68,21 @@ const App: React.FC = () => {
             <Route path={RoutePath.CLASSES} element={<Classes />} />
             <Route path={RoutePath.CLASS_DETAILS} element={<BatchDetails />} />
             <Route path={RoutePath.PAYMENT} element={<Payment />} />
+            
+            {/* Learning Hierarchy Routes */}
             <Route path={RoutePath.BATCH_SUBJECTS} element={<BatchSubjects />} />
+            <Route path={RoutePath.SUBJECT_CHAPTERS} element={<SubjectChapters />} />
+            <Route path={RoutePath.CHAPTER_LECTURES} element={<ChapterLectures />} />
+            <Route path={RoutePath.VIDEO_PLAYER} element={<VideoPlayer />} />
+
             <Route path={RoutePath.HELP} element={<Help />} />
             <Route path={RoutePath.PROFILE} element={<Profile user={user} onUpdateUser={handleUpdateUser} />} />
             <Route path={RoutePath.SETTINGS} element={<Settings />} />
             
             {/* Admin Routes */}
             <Route path={RoutePath.ADMIN} element={user.role === 'admin' ? <AdminDashboard /> : <Navigate to={RoutePath.HOME} />} />
-            <Route path={RoutePath.ADMIN_UPLOAD} element={user.role === 'admin' ? <AdminUpload /> : <Navigate to={RoutePath.HOME} />} />
+            <Route path={RoutePath.ADMIN_UPLOAD} element={<Navigate to={RoutePath.ADMIN} />} />
             
-            {/* Placeholders for secondary routes */}
             <Route path={RoutePath.PURCHASES} element={<PlaceholderPage title="Your Purchases" />} />
             <Route path={RoutePath.COMMUNITY} element={<PlaceholderPage title="Community Hub" />} />
             

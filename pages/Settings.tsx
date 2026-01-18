@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Session } from '../types';
 import { 
   Search, User as UserIcon, Shield, Lock, Bell, Moon, 
   CreditCard, Grid, Database, HelpCircle, ChevronRight, 
   Camera, Check, AlertTriangle, LogOut, Download, Trash2,
-  Smartphone, Mail, Eye, EyeOff, Globe, Laptop, ArrowLeft
+  Smartphone, Mail, Eye, EyeOff, Globe, Laptop, ArrowLeft, Upload
 } from 'lucide-react';
 import { userDb } from '../services/db';
 
@@ -72,6 +72,9 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [authModal, setAuthModal] = useState<{isOpen: boolean, action: () => void} | null>(null);
   const [passwordConfirm, setPasswordConfirm] = useState('');
+  
+  // Data Restore Ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Mock Sessions Data
   const [sessions, setSessions] = useState<Session[]>([
@@ -112,7 +115,7 @@ const Settings = () => {
   };
 
   const confirmAuth = () => {
-    if (passwordConfirm === 'password') { // Mock password check
+    if (passwordConfirm === 'password' || (user && passwordConfirm === user.password)) { 
       authModal?.action();
       setAuthModal(null);
       setPasswordConfirm('');
@@ -120,6 +123,63 @@ const Settings = () => {
     } else {
       showToast('Incorrect password', 'error');
     }
+  };
+
+  // --- Data Management Functions ---
+
+  const handleDownloadData = () => {
+    // Collect all data from localStorage
+    const data = {
+      users: JSON.parse(localStorage.getItem('study_platform_users_v2') || '{}'),
+      content: JSON.parse(localStorage.getItem('study_platform_content_v2') || '[]'),
+      requests: JSON.parse(localStorage.getItem('study_platform_requests_v2') || '[]'),
+      timestamp: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `study_platform_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Backup downloaded successfully');
+  };
+
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string);
+        
+        // Validate basic structure
+        if (json.users || json.content) {
+          if (confirm('Restoring will overwrite current data. Are you sure?')) {
+            if (json.users) localStorage.setItem('study_platform_users_v2', JSON.stringify(json.users));
+            if (json.content) localStorage.setItem('study_platform_content_v2', JSON.stringify(json.content));
+            if (json.requests) localStorage.setItem('study_platform_requests_v2', JSON.stringify(json.requests));
+            showToast('Data restored! Reloading...', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        } else {
+          showToast('Invalid backup file format', 'error');
+        }
+      } catch (err) {
+        showToast('Error reading file', 'error');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    event.target.value = '';
   };
 
   // Tabs Configuration
@@ -330,17 +390,93 @@ const Settings = () => {
           </div>
         );
       
+      case 'data':
+        return (
+          <div className="animate-fade-in">
+             <SectionCard title="Data Backup & Restore" description="Manage your local data manually">
+                <div className="space-y-6">
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                    <h4 className="font-bold text-blue-800 text-sm mb-1 flex items-center gap-2">
+                       <HelpCircle size={16} /> How to store in Gmail/Drive?
+                    </h4>
+                    <p className="text-sm text-blue-600 mb-2">
+                      Since this is a preview app, data is stored in your browser. To save it permanently:
+                    </p>
+                    <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
+                      <li>Click <strong>Download Backup</strong> below.</li>
+                      <li>Save the JSON file to your Google Drive.</li>
+                      <li>To restore later, use the <strong>Restore Backup</strong> button.</li>
+                    </ol>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                     <button 
+                       onClick={handleDownloadData}
+                       className="flex items-center justify-center gap-3 w-full p-4 bg-white border border-gray-300 hover:border-gray-400 hover:bg-gray-50 rounded-xl transition shadow-sm group"
+                     >
+                       <div className="bg-primary/10 text-primary p-2 rounded-lg group-hover:bg-primary/20">
+                         <Download size={24} />
+                       </div>
+                       <div className="text-left">
+                         <h5 className="font-bold text-gray-800">Download Backup</h5>
+                         <p className="text-xs text-gray-500">Save all users, classes, and requests</p>
+                       </div>
+                     </button>
+
+                     <button 
+                       onClick={handleRestoreClick}
+                       className="flex items-center justify-center gap-3 w-full p-4 bg-white border border-gray-300 hover:border-gray-400 hover:bg-gray-50 rounded-xl transition shadow-sm group"
+                     >
+                       <div className="bg-green-100 text-green-600 p-2 rounded-lg group-hover:bg-green-200">
+                         <Upload size={24} />
+                       </div>
+                       <div className="text-left">
+                         <h5 className="font-bold text-gray-800">Restore Backup</h5>
+                         <p className="text-xs text-gray-500">Upload a previously saved JSON file</p>
+                       </div>
+                     </button>
+                     {/* Hidden File Input */}
+                     <input 
+                       type="file" 
+                       ref={fileInputRef} 
+                       className="hidden" 
+                       accept=".json" 
+                       onChange={handleFileChange}
+                     />
+                  </div>
+                </div>
+             </SectionCard>
+
+             <SectionCard title="Clear Data" description="Remove all local data" danger>
+               <div className="flex items-center justify-between">
+                 <div>
+                   <h5 className="font-medium text-red-700">Reset App</h5>
+                   <p className="text-xs text-red-500">This will delete all users and content from browser memory.</p>
+                 </div>
+                 <button onClick={() => requireAuth(() => {
+                    localStorage.clear();
+                    window.location.reload();
+                 })} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">Reset</button>
+               </div>
+             </SectionCard>
+          </div>
+        );
+
       // Default fallback for other tabs
-      default:
+      default: {
+        const activeItem = tabs.find(t => t.id === activeTab);
+        const ActiveIcon = activeItem?.icon;
+        
         return (
           <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border border-dashed border-gray-300">
              <div className="p-4 bg-gray-50 rounded-full mb-3">
-               {tabs.find(t => t.id === activeTab)?.icon({ size: 32, className: 'text-gray-400' })}
+               {ActiveIcon && <ActiveIcon size={32} className="text-gray-400" />}
              </div>
-             <h3 className="text-lg font-bold text-gray-700">Settings for {tabs.find(t => t.id === activeTab)?.label}</h3>
+             <h3 className="text-lg font-bold text-gray-700">Settings for {activeItem?.label}</h3>
              <p className="text-gray-500 text-sm">This section is currently under development.</p>
           </div>
         );
+      }
     }
   };
 

@@ -34,27 +34,27 @@ const Payment: React.FC = () => {
 
   const finalPrice = Math.max(0, batch.price - discount);
   const upiId = "9732140742@ybl";
-  
-  // Create UPI Intent Link
   const upiLink = `upi://pay?pa=${upiId}&pn=BongMistry&am=${finalPrice}&cu=INR&tn=Payment for ${batch.name}`;
-  
-  // QR Code Image API (using qrserver for demo)
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
     setCouponError('');
     setCouponSuccess('');
-    
-    // Mock Coupon Logic
-    if (couponCode.toUpperCase() === 'SPECIAL500') {
-      setDiscount(500);
-      setCouponSuccess('Coupon Applied! ₹500 Saved.');
-    } else if (couponCode.toUpperCase() === 'BONG20') {
-      setDiscount(Math.round(batch.price * 0.2));
-      setCouponSuccess('20% Discount Applied!');
+    setDiscount(0);
+
+    const coupon = await userDb.validateCoupon(couponCode);
+
+    if (coupon) {
+      let discountAmount = 0;
+      if (coupon.discountType === 'flat') {
+        discountAmount = coupon.value;
+      } else {
+        discountAmount = Math.round(batch.price * (coupon.value / 100));
+      }
+      setDiscount(discountAmount);
+      setCouponSuccess(`Applied! Saved ₹${discountAmount}`);
     } else {
-      setCouponError('Invalid Coupon Code');
-      setDiscount(0);
+      setCouponError('Invalid or Expired Coupon');
     }
   };
 
@@ -92,7 +92,7 @@ const Payment: React.FC = () => {
                   <h2 className="text-2xl font-bold text-gray-800 mb-2">Payment Verification Pending</h2>
                   <p className="text-gray-500 mb-6">
                       We have received your payment request for <span className="font-bold">{batch.batchName}</span>. 
-                      Admins will verify your payment and approve access shortly (usually within 1 hour).
+                      Admins will verify your payment and approve access shortly.
                   </p>
                   <button 
                       onClick={() => navigate('/classes')}
@@ -107,7 +107,6 @@ const Payment: React.FC = () => {
 
   return (
     <div className="pb-20 bg-gray-50 min-h-screen">
-      {/* Header */}
       <div className="bg-white px-4 py-3 shadow-sm border-b border-gray-200 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
           <ArrowLeft size={20} />
@@ -117,7 +116,6 @@ const Payment: React.FC = () => {
 
       <div className="p-4 max-w-lg mx-auto space-y-6">
         
-        {/* Order Summary */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <h3 className="text-gray-500 text-sm font-medium mb-2 uppercase tracking-wide">Order Summary</h3>
           <div className="flex justify-between items-center mb-1">
@@ -137,7 +135,6 @@ const Payment: React.FC = () => {
           </div>
         </div>
 
-        {/* Coupon Section */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-2 mb-3">
             <Ticket className="text-primary" size={20} />
@@ -148,7 +145,7 @@ const Payment: React.FC = () => {
               type="text" 
               value={couponCode}
               onChange={(e) => setCouponCode(e.target.value)}
-              placeholder="Enter Code (e.g. SPECIAL500)"
+              placeholder="Enter Code"
               className="flex-1 border border-gray-300 rounded-lg px-4 py-2 uppercase focus:ring-2 focus:ring-primary outline-none"
             />
             <button 
@@ -162,7 +159,6 @@ const Payment: React.FC = () => {
           {couponSuccess && <p className="text-green-600 text-xs mt-2 flex items-center gap-1"><CheckCircle size={12}/> {couponSuccess}</p>}
         </div>
 
-        {/* Payment Methods */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="flex border-b border-gray-100">
                 <button 
@@ -182,7 +178,6 @@ const Payment: React.FC = () => {
             <div className="p-6">
                 {paymentTab === 'qr' ? (
                     <div className="flex flex-col items-center">
-                        <p className="text-sm text-gray-500 mb-4 text-center">Scan this QR code with any UPI app (PhonePe, GPay, Paytm)</p>
                         <div className="border-4 border-gray-900 rounded-xl p-2 mb-4">
                             <img src={qrCodeUrl} alt="Payment QR" className="w-48 h-48" />
                         </div>
@@ -191,24 +186,17 @@ const Payment: React.FC = () => {
                             <Copy size={14} className="cursor-pointer hover:text-primary" />
                         </div>
                         <div className="text-center">
-                            <p className="text-xs text-red-500 mb-2 font-medium">Do not close this page after payment!</p>
                             <button 
                                 onClick={handlePaymentSuccess}
                                 disabled={isProcessing}
-                                className="bg-green-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-green-700 w-full animate-pulse"
+                                className="bg-green-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-green-700 w-full"
                             >
-                                {isProcessing ? 'Verifying...' : 'I Have Paid'}
+                                {isProcessing ? 'Processing...' : 'I Have Paid'}
                             </button>
                         </div>
                     </div>
                 ) : (
                     <div className="text-center py-4">
-                        <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Smartphone size={32} />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">Pay via PhonePe</h3>
-                        <p className="text-gray-500 text-sm mb-6">Click the button below to open PhonePe or your default UPI app securely.</p>
-                        
                         <a 
                             href={upiLink}
                             target="_blank"
@@ -217,16 +205,10 @@ const Payment: React.FC = () => {
                         >
                             Continue with PhonePe
                         </a>
-
-                        <div className="relative my-4">
-                            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-                            <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-gray-500">After Payment</span></div>
-                        </div>
-
                         <button 
                             onClick={handlePaymentSuccess}
                             disabled={isProcessing}
-                            className="w-full bg-white border-2 border-green-500 text-green-600 py-2.5 rounded-xl font-bold hover:bg-green-50 transition"
+                            className="w-full bg-white border-2 border-green-500 text-green-600 py-2.5 rounded-xl font-bold"
                         >
                             {isProcessing ? 'Verifying...' : 'Click Here if Payment Done'}
                         </button>
@@ -234,7 +216,6 @@ const Payment: React.FC = () => {
                 )}
             </div>
         </div>
-
       </div>
     </div>
   );
