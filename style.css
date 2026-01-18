@@ -4,7 +4,7 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Utilities */
+/* Hide Scrollbar */
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }
@@ -13,30 +13,22 @@ body {
     scrollbar-width: none;
 }
 
+/* Glassmorphism Effect */
 .glass {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Animations */
-@keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+/* Custom Animations */
+@keyframes spin-slow {
+    to { transform: rotate(360deg); }
 }
-.animate-float {
-    animation: float 6s ease-in-out infinite;
-}
-
-@keyframes pulse-slow {
-    0%, 100% { opacity: 0.1; }
-    50% { opacity: 0.3; }
-}
-.animate-pulse-slow {
-    animation: pulse-slow 4s infinite;
+.animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
 }

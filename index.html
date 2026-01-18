@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Your Study Platform</title>
+    <title>Study Platform</title>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,10 +30,12 @@
             animation: {
               'fade-in': 'fadeIn 0.3s ease-in-out forwards',
               'slide-up': 'slideUp 0.4s ease-out forwards',
+              'float': 'float 6s ease-in-out infinite',
             },
             keyframes: {
               fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-              slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+              slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+              float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } }
             }
           }
         }
