@@ -31,7 +31,38 @@ const BATCHES = [
     }
 ];
 
-// UI Helper: Vibrant Gradients for dynamic cards
+// ==========================================
+// 2. HARDCODED USERS (PERMANENT DATA)
+// ==========================================
+// এই ইউজারগুলো কোড রান করার সাথে সাথেই ডাটাবেসে যোগ হয়ে যাবে।
+// আপনি নতুন ইউজার পার্মানেন্ট করতে চাইলে এখানে কপি করে বসাতে পারেন।
+
+const PRELOADED_USERS = [
+    {
+        id: 'ADMIN01',
+        name: 'Super Admin',
+        email: 'admin@study.com',
+        password: 'admin',
+        role: 'admin',
+        isVerified: true,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
+        enrolledBatches: [],
+        friends: []
+    },
+    {
+        id: 'STU01',
+        name: 'Demo Student',
+        email: 'student@study.com',
+        password: '123',
+        role: 'student',
+        isVerified: true,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Student',
+        enrolledBatches: ['8', '9'], // ডিফল্টভাবে ক্লাস ৮ ও ৯ এ এনরোল করা
+        friends: []
+    }
+];
+
+// UI Helper: Vibrant Gradients
 const GRADIENTS = [
     'from-blue-500 to-cyan-400',
     'from-fuchsia-500 to-pink-500',
@@ -46,12 +77,12 @@ function getGradient(index) {
 }
 
 // ==========================================
-// 2. DATABASE SERVICE (Safe Storage Wrapper)
+// 3. DATABASE SERVICE
 // ==========================================
 
 const KEYS = {
     USERS: 'app_users',
-    SESSION: 'app_session', // Persistent Session Key
+    SESSION: 'app_session', 
     CONTENT: 'app_content',
     REQUESTS: 'app_requests',
     CHAPTERS: 'app_chapters',
@@ -105,9 +136,9 @@ const db = {
     
     saveUser(user) {
         const users = this.getUsers();
-        if (Object.keys(users).length === 0) { 
-            user.role = 'admin'; 
-            user.isVerified = true; 
+        // If first user ever, make admin (fallback)
+        if (Object.keys(users).length === 0 && user.role !== 'admin') { 
+            // user.role = 'admin'; 
         }
         users[user.email] = user;
         this._save(KEYS.USERS, users);
@@ -115,6 +146,19 @@ const db = {
         const session = this.getSession();
         if(session && session.email === user.email) this.setSession(user);
         return user;
+    },
+
+    // Inject Preloaded Users
+    seedUsers() {
+        const users = this.getUsers();
+        let changed = false;
+        PRELOADED_USERS.forEach(u => {
+            if (!users[u.email]) {
+                users[u.email] = u;
+                changed = true;
+            }
+        });
+        if (changed) this._save(KEYS.USERS, users);
     },
 
     // --- Activity Logging ---
@@ -142,14 +186,11 @@ const db = {
         const user = users[email];
         if(!user) return null;
         
-        // Update device ID to current
         user.deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         user.lastLogin = Date.now();
         
         users[email] = user;
         this._save(KEYS.USERS, users);
-        
-        // Save to LocalStorage for persistence (Auto Login)
         this.setSession(user);
         
         this.logActivity(user.id, 'LOGIN', 'User logged in successfully');
@@ -159,11 +200,7 @@ const db = {
     validateSession() {
         const session = this.getSession();
         if(!session) return false;
-        
-        // Check if user still exists in DB
         const user = this.getUser(session.email);
-        
-        // Security: Multi-device logout check
         if(!user || user.deviceId !== session.deviceId) { 
             this.clearSession(); 
             return false; 
@@ -173,7 +210,7 @@ const db = {
     
     getSession() { return this._get(KEYS.SESSION, null); },
     setSession(u) { this._save(KEYS.SESSION, u); },
-    clearSession() { storage.removeItem(KEYS.SESSION); }, // Only cleared on explicit logout
+    clearSession() { storage.removeItem(KEYS.SESSION); },
 
     verifyEmail(email, code) {
         const users = this.getUsers();
@@ -322,7 +359,7 @@ const db = {
 };
 
 // ==========================================
-// 3. APP STATE & ROUTING
+// 4. APP STATE & ROUTING
 // ==========================================
 
 const state = {
@@ -353,6 +390,10 @@ document.addEventListener('click', e => {
 
 // Seed data
 async function seedData() {
+    // 1. Seed Hardcoded Users
+    db.seedUsers();
+
+    // 2. Seed Chapters if not exist
     if(!db.hasChapters('8')) {
         const ch = [];
         for(let i=1; i<=5; i++) ch.push({ id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${i}: Demo Math`, order:i });
@@ -371,7 +412,7 @@ async function seedData() {
 }
 
 // ==========================================
-// 4. MAIN RENDERER
+// 5. MAIN RENDERER
 // ==========================================
 
 function renderApp() {
@@ -408,7 +449,7 @@ function renderApp() {
 }
 
 // ==========================================
-// 5. VIEW COMPONENTS
+// 6. VIEW COMPONENTS
 // ==========================================
 
 // --- AUTH PAGE ---
@@ -424,6 +465,11 @@ function renderAuthPage() {
                 </div>
                 <h2 class="text-3xl font-extrabold text-slate-800 tracking-tight" id="auth-title">Welcome Back</h2>
                 <p class="text-slate-500 text-sm mt-2 font-medium">Secure Login &bull; One Device Policy</p>
+                <div class="mt-4 p-3 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
+                    <strong>Demo Login:</strong><br>
+                    Student: student@study.com / 123<br>
+                    Admin: admin@study.com / admin
+                </div>
             </div>
             <form id="auth-form" class="space-y-4">
                 <div id="name-field" class="hidden animate-slide-up"><input type="text" id="name" placeholder="Full Name" class="w-full p-4 bg-white/50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 transition"></div>
