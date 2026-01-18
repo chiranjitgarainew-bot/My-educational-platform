@@ -523,6 +523,8 @@ function renderLayout(content) {
                 ${navItem('message-square', 'Inbox', 'inbox')}
                 ${u.role === 'admin' ? navItem('shield', 'Admin Panel', 'admin') : ''}
                 <hr class="my-4 border-gray-100">
+                ${navItem('settings', 'Settings', 'settings')}
+                ${navItem('help-circle', 'Help Center', 'help')}
                 <button id="logout-btn" class="w-full flex items-center px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition">
                     <i data-lucide="log-out" class="mr-3 w-5"></i> Sign Out
                 </button>
@@ -596,16 +598,20 @@ function renderCurrentPage() {
         case 'lectures': return pageLectures();
         case 'player': return pagePlayer();
         case 'admin': return pageAdmin();
+        case 'admin-upload': return pageAdminUpload();
         case 'inbox': return pageInbox();
         case 'chat': return pageChat();
         case 'profile': return pageProfile();
         case 'purchases': return pagePurchases();
+        case 'settings': return pageSettings();
+        case 'help': return pageHelp();
         default: return pageHome();
     }
 }
 
 function attachPageLogic() {
     if(state.route === 'admin') attachAdminLogic();
+    if(state.route === 'admin-upload') attachAdminUploadLogic();
     if(state.route === 'payment') attachPaymentLogic();
     if(state.route === 'player') attachPlayerLogic();
     if(state.route === 'chat') attachChatLogic();
@@ -920,7 +926,7 @@ function pageLectures() {
         </div>
 
         ${state.user.role === 'admin' ? `
-            <button onclick="alert('Please use the desktop admin portal to upload videos.');" 
+            <button data-link="admin-upload" 
                     class="fixed bottom-24 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition z-50">
                 <i data-lucide="plus"></i>
             </button>
@@ -977,18 +983,20 @@ function attachPlayerLogic() {
                 });
             }
         }, 5000);
-
-        // Cleanup on navigate away is handled by replacing innerHTML (script re-runs)
-        // But for cleaner SPA, listeners should be removed. 
-        // In this simple architecture, replacing DOM kills the listener references automatically.
     }
 }
 
 // --- ADMIN PANEL ---
 function pageAdmin() {
+    if(state.user.role !== 'admin') return '<div class="p-10 text-center text-red-500">Access Denied</div>';
     const reqs = db.getRequests();
     return `
-    <h2 class="text-2xl font-bold mb-6">Admin Dashboard</h2>
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">Admin Dashboard</h2>
+        <button data-link="admin-upload" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700">
+            <i data-lucide="upload" class="w-4 h-4 inline mr-1"></i> Upload Content
+        </button>
+    </div>
     
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center">
@@ -1029,6 +1037,87 @@ function attachAdminLogic() {
             renderApp(); 
         }
     };
+}
+
+// --- ADMIN UPLOAD ---
+function pageAdminUpload() {
+    if(state.user.role !== 'admin') return '<div class="p-10 text-center text-red-500">Access Denied</div>';
+    
+    // Get all chapters from all batches
+    const chapters = db._get(KEYS.CHAPTERS, []);
+
+    return `
+    <div>
+        <div class="flex items-center gap-2 mb-6">
+            <button onclick="window.history.back()" class="p-2 bg-white rounded-full border border-gray-200"><i data-lucide="arrow-left" width="18"></i></button>
+            <h1 class="text-xl font-bold">Upload Content</h1>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <form id="upload-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Select Chapter</label>
+                    <select id="chapter-select" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
+                        <option value="">-- Choose Chapter --</option>
+                        ${chapters.map(c => `<option value="${c.id}">${c.title} (${c.subject})</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Title</label>
+                    <input type="text" id="vid-title" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Description</label>
+                    <textarea id="vid-desc" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Video URL (YouTube or HLS)</label>
+                    <input type="text" id="vid-url" required placeholder="https://..." class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Thumbnail URL</label>
+                    <input type="text" id="vid-thumb" placeholder="https://..." class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
+                </div>
+                
+                <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">
+                    Upload Video
+                </button>
+            </form>
+        </div>
+    </div>`;
+}
+
+function attachAdminUploadLogic() {
+    const form = document.getElementById('upload-form');
+    if(form) {
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            const chId = document.getElementById('chapter-select').value;
+            const title = document.getElementById('vid-title').value;
+            const desc = document.getElementById('vid-desc').value;
+            const url = document.getElementById('vid-url').value;
+            const thumb = document.getElementById('vid-thumb').value;
+
+            if(!chId) { alert('Please select a chapter'); return; }
+
+            const chapter = db.getChapterById(chId);
+
+            db.saveContent({
+                id: Date.now().toString(),
+                batchId: chapter.batchId,
+                chapterId: chId,
+                title,
+                description: desc,
+                videoUrl: url,
+                thumbnail: thumb,
+                duration: 600, // Default duration
+                type: 'video'
+            });
+
+            alert('Content uploaded successfully!');
+            navigate('lectures', {cid: chId});
+        };
+    }
 }
 
 // --- SOCIAL / CHAT ---
@@ -1117,7 +1206,6 @@ function attachChatLogic() {
                 isRead: false
             });
             renderApp(); // Re-render to show message
-            // Note: In real app, you'd append DOM node instead of full re-render for performance
         };
     }
 }
@@ -1126,40 +1214,89 @@ function attachChatLogic() {
 function pageProfile() {
     const u = state.user;
     const otherUsers = Object.values(db.getUsers()).filter(x => x.id !== u.id);
-    
+    const myRequests = db.getRequests().filter(r => r.userId === u.id);
+
     return `
-    <div class="space-y-6">
-        <div class="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm text-center relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-20 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-            <img src="${u.avatar}" class="w-24 h-24 rounded-full mx-auto border-4 border-white shadow-lg relative z-10 -mt-10">
-            <h2 class="text-2xl font-bold mt-4">${u.name}</h2>
-            <p class="text-gray-500 text-sm">${u.email}</p>
+    <div class="space-y-6 pb-20">
+        <!-- User Card -->
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+            <div class="relative z-10 -mt-2">
+                <img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white">
+            </div>
+            
+            <h2 class="text-2xl font-black mt-3 text-slate-800">${u.name}</h2>
+            <p class="text-slate-500 text-sm font-medium">${u.email}</p>
+            
             <div class="mt-4 flex justify-center gap-2">
-                <span class="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600 uppercase tracking-wide">${u.role}</span>
-                ${u.isVerified ? '<span class="px-3 py-1 bg-green-100 rounded-full text-xs font-bold text-green-600 flex items-center gap-1"><i data-lucide="shield-check" width="12"></i> Verified</span>' : ''}
+                <span class="px-4 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100">${u.role}</span>
+                ${u.isVerified 
+                    ? '<span class="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' 
+                    : '<span class="px-4 py-1.5 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'
+                }
             </div>
         </div>
 
+        <!-- Payment/Request History -->
         <div>
-            <h3 class="font-bold text-lg mb-4 px-2">Community & Friends</h3>
+            <h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="history" class="text-indigo-600"></i> Enrollment History</h3>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                ${myRequests.length > 0 ? `
+                    <div class="divide-y divide-gray-50">
+                        ${myRequests.map(r => `
+                            <div class="p-4 flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-700 text-sm">${r.batchName}</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">${new Date(r.timestamp).toLocaleDateString()}</div>
+                                </div>
+                                <div>
+                                    ${r.status === 'approved' 
+                                        ? '<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">Approved</span>' 
+                                        : r.status === 'rejected' 
+                                            ? '<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold">Rejected</span>'
+                                            : '<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-[10px] font-bold">Pending</span>'
+                                    }
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div class="p-8 text-center">
+                        <div class="bg-gray-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <i data-lucide="file-text" class="text-gray-300"></i>
+                        </div>
+                        <p class="text-gray-400 text-xs font-bold">No payment requests yet.</p>
+                    </div>
+                `}
+            </div>
+        </div>
+
+        <!-- Friends Section -->
+        <div>
+            <h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="users" class="text-indigo-600"></i> Community</h3>
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
                 ${otherUsers.length > 0 ? otherUsers.map(user => `
                     <div class="p-4 flex justify-between items-center hover:bg-gray-50 transition">
                         <div class="flex items-center gap-3">
-                            <img src="${user.avatar}" class="w-10 h-10 rounded-full">
+                            <img src="${user.avatar}" class="w-10 h-10 rounded-full border border-gray-100">
                             <div>
-                                <div class="font-bold text-sm">${user.name}</div>
+                                <div class="font-bold text-sm text-slate-700">${user.name}</div>
                                 <div class="text-[10px] text-gray-400">Student</div>
                             </div>
                         </div>
                         ${u.friends?.includes(user.id) 
-                            ? '<span class="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded">Friend</span>' 
-                            : `<button onclick="requestFriend('${user.id}')" class="text-indigo-600 bg-indigo-50 p-2 rounded-full hover:bg-indigo-100"><i data-lucide="user-plus" width="16"></i></button>`
+                            ? '<span class="text-[10px] font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full">Connected</span>' 
+                            : `<button onclick="requestFriend('${user.id}')" class="text-indigo-600 bg-indigo-50 p-2 rounded-full hover:bg-indigo-100 hover:scale-110 transition"><i data-lucide="user-plus" width="16"></i></button>`
                         }
                     </div>
                 `).join('') : '<div class="p-6 text-center text-gray-400 text-sm">No other users found.</div>'}
             </div>
         </div>
+        
+        <!-- Logout Action -->
+        <button onclick="db.clearSession(); renderApp();" class="w-full bg-red-50 text-red-600 font-bold py-4 rounded-xl border border-red-100 hover:bg-red-100 transition flex items-center justify-center gap-2">
+            <i data-lucide="log-out" width="18"></i> Sign Out
+        </button>
     </div>`;
 }
 
@@ -1195,6 +1332,79 @@ function pagePurchases() {
                 <button data-link="classes" class="text-indigo-600 font-bold hover:underline">Browse Batches</button>
             </div>
         ` : ''}
+    </div>`;
+}
+
+// --- SETTINGS ---
+function pageSettings() {
+    return `
+    <h2 class="text-2xl font-bold mb-6">Settings</h2>
+    <div class="space-y-4">
+        <div class="bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center">
+            <div>
+                <h3 class="font-bold text-slate-800">Push Notifications</h3>
+                <p class="text-xs text-gray-400">Receive updates about your classes</p>
+            </div>
+            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                <input type="checkbox" name="toggle" id="toggle" checked class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                <label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-indigo-300 cursor-pointer"></label>
+            </div>
+        </div>
+        
+        <button onclick="alert('Password reset link sent to email.')" class="w-full bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center hover:bg-gray-50">
+            <span class="font-bold text-slate-800">Change Password</span>
+            <i data-lucide="chevron-right" class="text-gray-400"></i>
+        </button>
+
+        <button onclick="localStorage.clear(); window.location.reload()" class="w-full bg-red-50 p-5 rounded-2xl border border-red-100 flex justify-between items-center hover:bg-red-100">
+            <span class="font-bold text-red-600">Clear Cache & Reset App</span>
+            <i data-lucide="trash-2" class="text-red-400"></i>
+        </button>
+    </div>
+    <style>
+        .toggle-checkbox:checked { right: 0; border-color: #68D391; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
+        .toggle-checkbox { right: 0; transition: all 0.3s; }
+    </style>`;
+}
+
+// --- HELP ---
+function pageHelp() {
+    return `
+    <h2 class="text-2xl font-bold mb-6">Help Center</h2>
+    
+    <div class="space-y-4">
+        <div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg mb-6">
+            <h3 class="font-bold text-lg mb-2">Need Support?</h3>
+            <p class="text-sm opacity-90 mb-4">Our team is available 24/7 to help you with any issues.</p>
+            <a href="mailto:support@studyapp.com" class="inline-block bg-white text-indigo-700 px-4 py-2 rounded-lg font-bold text-sm">Contact Support</a>
+        </div>
+
+        <h3 class="font-bold text-gray-500 uppercase text-xs tracking-wider px-2">Frequently Asked Questions</h3>
+        
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            <details class="group p-4">
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none">
+                    <span>How do I enroll in a batch?</span>
+                    <span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span>
+                </summary>
+                <p class="text-gray-500 text-sm mt-3 leading-relaxed">Go to "All Batches", select a batch, click "Enroll Now", make the payment via UPI, and submit the request. Admin will approve it shortly.</p>
+            </details>
+            <details class="group p-4">
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none">
+                    <span>Can I watch videos offline?</span>
+                    <span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span>
+                </summary>
+                <p class="text-gray-500 text-sm mt-3 leading-relaxed">Currently, you need an active internet connection to stream lectures.</p>
+            </details>
+             <details class="group p-4">
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none">
+                    <span>My payment is pending?</span>
+                    <span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span>
+                </summary>
+                <p class="text-gray-500 text-sm mt-3 leading-relaxed">Approvals usually take 1-2 hours. If it takes longer, please contact support.</p>
+            </details>
+        </div>
     </div>`;
 }
 
