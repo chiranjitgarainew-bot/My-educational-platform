@@ -191,14 +191,28 @@ const db = {
         if(req) {
             req.status = 'approved';
             this._save(KEYS.REQUESTS, reqs);
+            
             const users = this.getUsers();
             const user = Object.values(users).find(u => u.id === req.userId);
+            
             if(user) {
                 user.enrolledBatches = user.enrolledBatches || [];
                 if(!user.enrolledBatches.includes(req.batchId)) {
                     user.enrolledBatches.push(req.batchId);
                     users[user.email] = user;
                     this._save(KEYS.USERS, users);
+                    
+                    // Update active session if the admin is approving their own test account
+                    // or if the user is currently logged in (handled via reload usually, but let's sync)
+                    const session = this.getSession();
+                    if(session && session.id === user.id) {
+                        session.enrolledBatches = user.enrolledBatches;
+                        this.setSession(session);
+                        // Update global state immediately
+                        if(state.user && state.user.id === user.id) {
+                            state.user.enrolledBatches = user.enrolledBatches;
+                        }
+                    }
                 }
             }
         }
@@ -280,15 +294,24 @@ document.addEventListener('click', e => {
     }
 });
 
+// Seed data for all classes so purchase flow works
 async function seedData() {
+    // Seed Class 8
     if(!db.hasChapters('8')) {
         const ch = [];
-        for(let i=1; i<=5; i++) {
-            ch.push({ 
-                id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', 
-                title:`Chapter ${i}: Demo Math Lesson`, order:i 
-            });
-        }
+        for(let i=1; i<=5; i++) ch.push({ id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${i}: Demo Math`, order:i });
+        db.seedChapters(ch);
+    }
+    // Seed Class 9
+    if(!db.hasChapters('9')) {
+        const ch = [];
+        for(let i=1; i<=5; i++) ch.push({ id:`s9_${i}`, batchId:'9', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${i}: Physics Concept`, order:i });
+        db.seedChapters(ch);
+    }
+    // Seed Class 10
+    if(!db.hasChapters('10')) {
+        const ch = [];
+        for(let i=1; i<=5; i++) ch.push({ id:`s10_${i}`, batchId:'10', subject:'জীবন বিজ্ঞান (Life Science)', title:`Chapter ${i}: Biology Intro`, order:i });
         db.seedChapters(ch);
     }
 }
@@ -657,23 +680,220 @@ function attachPaymentLogic() {
     };
 }
 
+// --- PURCHASED BATCHES & FLOW ---
+
+function pagePurchases() {
+    // Filter batches that are in user's enrolled list
+    const enrolled = BATCHES.filter(b => state.user.enrolledBatches?.includes(b.id));
+
+    return `
+    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="book-open-check" class="text-indigo-600"></i> My Learning</h2>
+    
+    <div class="grid gap-5">
+        ${enrolled.map(b => `
+            <div data-link="subjects" data-params='{"id":"${b.id}"}' class="bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="h-24 ${b.color} relative p-4">
+                    <span class="bg-white/90 text-xs font-bold px-3 py-1 rounded-full absolute bottom-3 left-4 shadow-sm text-gray-800 flex items-center gap-1">
+                        <i data-lucide="play-circle" width="14" class="text-indigo-600"></i> Continue Learning
+                    </span>
+                    <i data-lucide="book" class="text-white/30 absolute top-2 right-4 w-16 h-16"></i>
+                </div>
+                <div class="p-5">
+                    <h3 class="text-lg font-bold text-slate-800 mb-1 group-hover:text-indigo-600 transition">${b.batchName}</h3>
+                    <p class="text-xs text-gray-400 mb-4 line-clamp-1">${b.description}</p>
+                    
+                    <div class="w-full bg-gray-100 rounded-full h-2 mb-2">
+                        <div class="bg-green-500 h-2 rounded-full" style="width: 15%"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-bold text-gray-400">
+                        <span>15% Completed</span>
+                        <span>View Subjects <i data-lucide="chevron-right" width="10" class="inline"></i></span>
+                    </div>
+                </div>
+            </div>
+        `).join('')}
+        
+        ${enrolled.length === 0 ? `
+            <div class="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
+                <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                    <i data-lucide="lock" width="32"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900">No Batches Purchased</h3>
+                <p class="text-gray-400 text-sm mb-6 max-w-xs mx-auto">You haven't enrolled in any classes yet. Purchase a batch to start learning.</p>
+                <button data-link="classes" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-indigo-500/30 transition">Explore Batches</button>
+            </div>
+        ` : ''}
+    </div>`;
+}
+
 function pageSubjects() {
     const b = BATCHES.find(x => x.id === state.params.id);
-    if(!state.user.enrolledBatches.includes(b.id)) { navigate('payment', {id: b.id}); return ''; }
-    return `<div class="pb-10"><div class="bg-indigo-600 -m-4 p-8 pb-12 mb-6 text-white rounded-b-[40px] shadow-lg"><button onclick="navigate('classes')" class="mb-4 text-white/80 hover:text-white"><i data-lucide="arrow-left"></i></button><h1 class="text-3xl font-black">${b.batchName}</h1><p class="text-indigo-200 mt-2">Select a subject to continue</p></div><div class="space-y-4 px-2 -mt-8">${b.subjects.map(sub => `<div data-link="chapters" data-params='{"bid":"${b.id}","sub":"${encodeURIComponent(sub)}"}' class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:border-indigo-300 transition group"><div class="flex items-center gap-4"><div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-xl group-hover:bg-indigo-600 group-hover:text-white transition">${sub[0]}</div><h3 class="font-bold text-lg text-slate-800">${sub}</h3></div><div class="bg-gray-50 p-2 rounded-full group-hover:bg-indigo-50 transition"><i data-lucide="chevron-right" class="text-gray-400 group-hover:text-indigo-600"></i></div></div>`).join('')}</div></div>`;
+    
+    // Security Check: If not enrolled, redirect to payment
+    if(!state.user.enrolledBatches.includes(b.id)) { 
+        navigate('payment', {id: b.id}); 
+        return ''; 
+    }
+
+    return `
+    <div class="pb-10">
+        <!-- Header -->
+        <div class="bg-slate-900 -m-4 p-8 pb-16 mb-8 text-white rounded-b-[40px] shadow-lg relative overflow-hidden">
+             <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
+             
+             <button onclick="window.history.back()" class="mb-6 bg-white/10 hover:bg-white/20 p-2 rounded-full transition backdrop-blur-md"><i data-lucide="arrow-left"></i></button>
+             
+             <span class="px-3 py-1 bg-indigo-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-widest mb-2 inline-block">My Classroom</span>
+             <h1 class="text-2xl font-black leading-tight">${b.batchName}</h1>
+             <p class="text-slate-400 text-sm mt-2">Select a subject to view chapters</p>
+        </div>
+        
+        <!-- Subjects Grid -->
+        <div class="space-y-4 px-2 -mt-10 relative z-10">
+            ${b.subjects.map(sub => `
+                <div data-link="chapters" data-params='{"bid":"${b.id}","sub":"${encodeURIComponent(sub)}"}' 
+                     class="bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex items-center justify-between cursor-pointer hover:border-indigo-400 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-600 rounded-2xl flex items-center justify-center font-black text-2xl shadow-inner group-hover:scale-110 transition">
+                            ${sub[0]}
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-800 group-hover:text-indigo-600 transition">${sub}</h3>
+                            <p class="text-xs text-gray-400 font-bold mt-0.5">Click to view chapters</p>
+                        </div>
+                    </div>
+                    <div class="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition shadow-sm">
+                        <i data-lucide="chevron-right" width="16"></i>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    </div>`;
 }
+
 function pageChapters() {
-    const { bid, sub } = state.params; const sName = decodeURIComponent(sub); const chapters = db.getChapters(bid, sName);
-    if(chapters.length === 0) { seedData().then(() => renderApp()); return '<div class="text-center mt-20"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div><p class="mt-4 text-gray-500">Loading Content...</p></div>'; }
-    return `<div><div class="flex items-center gap-2 mb-6"><button onclick="navigate('subjects', {id:'${bid}'})" class="p-2 bg-white rounded-full border border-gray-200"><i data-lucide="arrow-left" width="18"></i></button><h1 class="text-xl font-bold truncate">${sName}</h1></div><div class="grid gap-3">${chapters.map((ch, idx) => `<div data-link="lectures" data-params='{"cid":"${ch.id}"}' class="bg-white p-5 rounded-2xl shadow-sm border-l-[6px] border-l-indigo-500 border-gray-100 cursor-pointer hover:shadow-md transition"><div class="text-[10px] font-extrabold text-indigo-500 uppercase tracking-wider mb-1">Chapter ${String(idx+1).padStart(2, '0')}</div><h3 class="font-bold text-lg text-gray-900">${ch.title}</h3><div class="mt-2 text-xs text-gray-400 font-bold flex items-center gap-1"><i data-lucide="play-circle" width="12"></i> View Lectures</div></div>`).join('')}</div></div>`;
+    const { bid, sub } = state.params; 
+    const sName = decodeURIComponent(sub); 
+    const chapters = db.getChapters(bid, sName);
+
+    // Auto-seed if empty (fallback)
+    if(chapters.length === 0) { 
+        seedData().then(() => renderApp()); 
+        return '<div class="text-center mt-20"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div><p class="mt-4 text-gray-500">Loading Content...</p></div>'; 
+    }
+
+    return `
+    <div>
+        <div class="flex items-center gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 sticky top-4 z-20">
+            <button onclick="window.history.back()" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="arrow-left" width="20"></i></button>
+            <h1 class="text-lg font-bold truncate flex-1">${sName}</h1>
+        </div>
+        
+        <div class="grid gap-4">
+            ${chapters.map((ch, idx) => `
+                <div data-link="lectures" data-params='{"cid":"${ch.id}"}' 
+                     class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:border-indigo-300 hover:shadow-md transition relative overflow-hidden group">
+                    
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500 rounded-l-2xl"></div>
+                    
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="text-[10px] font-extrabold text-indigo-500 uppercase tracking-wider mb-1 bg-indigo-50 inline-block px-2 py-0.5 rounded">Chapter ${String(idx+1).padStart(2, '0')}</div>
+                            <h3 class="font-bold text-lg text-gray-900 mt-1">${ch.title}</h3>
+                        </div>
+                        <i data-lucide="play-circle" class="text-gray-300 group-hover:text-indigo-600 transition"></i>
+                    </div>
+                    
+                    <div class="mt-4 pt-3 border-t border-gray-50 flex items-center gap-2 text-xs font-bold text-gray-500">
+                         <span class="flex items-center gap-1"><i data-lucide="video" width="12"></i> Video Lectures</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    </div>`;
 }
+
 function pageLectures() {
-    const { cid } = state.params; const contents = db.getContent().filter(c => c.chapterId === cid); const progress = db.getUserProgress(state.user.id);
-    return `<div><div class="flex items-center gap-2 mb-6"><button onclick="window.history.back()" class="p-2 bg-white rounded-full border border-gray-200"><i data-lucide="arrow-left" width="18"></i></button><h1 class="text-xl font-bold">Class Lectures</h1></div><div class="grid gap-4">${contents.map((c, idx) => { const done = progress.find(p => p.contentId === c.id && p.completed); return `<div data-link="player" data-params='{"id":"${c.id}"}' class="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-lg transition group"><div class="aspect-video bg-slate-900 relative flex items-center justify-center overflow-hidden">${c.thumbnail ? `<img src="${c.thumbnail}" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition duration-500">` : `<div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900"></div>`}<div class="absolute inset-0 flex items-center justify-center z-10"><div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 group-hover:scale-110 transition">${done ? '<i data-lucide="check" class="text-green-400"></i>' : '<i data-lucide="play" fill="currentColor"></i>'}</div></div></div><div class="p-4"><h3 class="font-bold text-gray-800 line-clamp-1">${c.title}</h3><p class="text-xs text-gray-400 mt-1 line-clamp-2">${c.description || 'Start watching now...'}</p></div></div>`; }).join('')}${contents.length === 0 ? `<div class="text-center py-12 border-2 border-dashed border-gray-200 rounded-3xl"><div class="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400"><i data-lucide="video-off"></i></div><p class="text-gray-400 font-bold">No lectures uploaded yet.</p></div>` : ''}</div>${state.user.role === 'admin' ? `<button data-link="admin-upload" class="fixed bottom-24 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition z-50"><i data-lucide="plus"></i></button>` : ''}</div>`;
+    const { cid } = state.params; 
+    const contents = db.getContent().filter(c => c.chapterId === cid); 
+    const progress = db.getUserProgress(state.user.id);
+    
+    return `
+    <div>
+        <div class="flex items-center gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 sticky top-4 z-20">
+            <button onclick="window.history.back()" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="arrow-left" width="20"></i></button>
+            <h1 class="text-lg font-bold">Class Lectures</h1>
+        </div>
+
+        <div class="grid gap-5">
+            ${contents.map((c, idx) => {
+                const done = progress.find(p => p.contentId === c.id && p.completed);
+                return `
+                <div data-link="player" data-params='{"id":"${c.id}"}' class="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                    <div class="aspect-video bg-slate-900 relative flex items-center justify-center overflow-hidden">
+                        ${c.thumbnail 
+                            ? `<img src="${c.thumbnail}" class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition duration-700">` 
+                            : `<div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900"></div>`
+                        }
+                        <div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition"></div>
+                        
+                        <div class="absolute inset-0 flex items-center justify-center z-10">
+                            <div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 shadow-lg group-hover:scale-110 group-hover:bg-indigo-600/90 transition duration-300">
+                                ${done ? '<i data-lucide="check" class="text-white" width="24"></i>' : '<i data-lucide="play" fill="currentColor" width="24"></i>'}
+                            </div>
+                        </div>
+                        
+                        ${done ? '<div class="absolute top-3 right-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">COMPLETED</div>' : ''}
+                    </div>
+                    <div class="p-5">
+                        <h3 class="font-bold text-gray-800 line-clamp-1 text-lg">${c.title}</h3>
+                        <p class="text-xs text-gray-400 mt-1 line-clamp-2">${c.description || 'Watch this lecture to understand the concepts.'}</p>
+                    </div>
+                </div>`;
+            }).join('')}
+            
+            ${contents.length === 0 ? `
+                <div class="text-center py-16 border-2 border-dashed border-gray-200 rounded-3xl">
+                    <div class="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400"><i data-lucide="video-off"></i></div>
+                    <p class="text-gray-400 font-bold">No lectures uploaded yet.</p>
+                </div>
+            ` : ''}
+        </div>
+
+        ${state.user.role === 'admin' ? `
+            <button data-link="admin-upload" 
+                    class="fixed bottom-24 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition z-50 animate-bounce">
+                <i data-lucide="plus"></i>
+            </button>
+        ` : ''}
+    </div>`;
 }
+
 function pagePlayer() {
-    const c = db.getContentById(state.params.id); if(!c) return '<div class="p-10 text-center">Video Not Found</div>';
-    return `<div class="bg-black min-h-screen text-white flex flex-col"><div class="aspect-video bg-black relative sticky top-0 z-50">${c.videoUrl.includes('youtube') ? `<iframe src="${c.videoUrl}" class="w-full h-full" allowfullscreen allow="autoplay"></iframe>` : `<video id="video-el" controls class="w-full h-full" poster="${c.thumbnail || ''}"></video>`}<button onclick="window.history.back()" class="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full hover:bg-black/60 transition"><i data-lucide="arrow-left"></i></button></div><div class="p-6 flex-1 bg-slate-900"><h1 class="text-xl font-bold leading-tight">${c.title}</h1><p class="text-slate-400 text-sm mt-3 leading-relaxed">${c.description}</p></div></div>`;
+    const c = db.getContentById(state.params.id); 
+    if(!c) return '<div class="p-10 text-center">Video Not Found</div>';
+    
+    return `
+    <div class="bg-black min-h-screen text-white flex flex-col">
+        <div class="aspect-video bg-black relative sticky top-0 z-50 shadow-2xl">
+            ${c.videoUrl.includes('youtube') 
+                ? `<iframe src="${c.videoUrl}" class="w-full h-full" allowfullscreen allow="autoplay"></iframe>` 
+                : `<video id="video-el" controls class="w-full h-full" poster="${c.thumbnail || ''}"></video>`
+            }
+            <button onclick="window.history.back()" class="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition text-white border border-white/10">
+                <i data-lucide="arrow-left"></i>
+            </button>
+        </div>
+        <div class="p-6 flex-1 bg-slate-900">
+            <h1 class="text-xl font-bold leading-tight text-white">${c.title}</h1>
+            <div class="flex items-center gap-3 mt-4 mb-6">
+                <span class="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider text-gray-300">Lecture</span>
+                <span class="text-xs text-gray-500">&bull;</span>
+                <span class="text-xs text-gray-400 font-bold">Updated Recently</span>
+            </div>
+            <p class="text-slate-400 text-sm leading-relaxed border-t border-white/10 pt-4">${c.description}</p>
+        </div>
+    </div>`;
 }
 function attachPlayerLogic() {
     const c = db.getContentById(state.params.id);
@@ -855,8 +1075,47 @@ function pageProfile() {
 window.requestFriend = (id) => { db.addFriend(state.user.id, id); alert('Friend added!'); renderApp(); };
 
 function pagePurchases() {
+    // Filter batches that are in user's enrolled list
     const enrolled = BATCHES.filter(b => state.user.enrolledBatches?.includes(b.id));
-    return `<h2 class="text-2xl font-bold mb-6">My Enrolled Batches</h2><div class="grid gap-4">${enrolled.map(b => `<div data-link="subjects" data-params='{"id":"${b.id}"}' class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition group"><div class="flex justify-between items-center mb-2"><span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Active</span></div><h3 class="text-lg font-bold text-slate-800 group-hover:text-indigo-600 transition">${b.batchName}</h3><p class="text-sm text-gray-400 mt-1">Click to view subjects</p></div>`).join('')}${enrolled.length === 0 ? `<div class="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200"><div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400"><i data-lucide="book"></i></div><h3 class="font-bold text-gray-900">No enrollments yet</h3><p class="text-gray-400 text-sm mb-4">Explore batches and start learning.</p><button data-link="classes" class="text-indigo-600 font-bold hover:underline">Browse Batches</button></div>` : ''}</div>`;
+
+    return `
+    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="book-open-check" class="text-indigo-600"></i> My Learning</h2>
+    
+    <div class="grid gap-5">
+        ${enrolled.map(b => `
+            <div data-link="subjects" data-params='{"id":"${b.id}"}' class="bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="h-24 ${b.color} relative p-4">
+                    <span class="bg-white/90 text-xs font-bold px-3 py-1 rounded-full absolute bottom-3 left-4 shadow-sm text-gray-800 flex items-center gap-1">
+                        <i data-lucide="play-circle" width="14" class="text-indigo-600"></i> Continue Learning
+                    </span>
+                    <i data-lucide="book" class="text-white/30 absolute top-2 right-4 w-16 h-16"></i>
+                </div>
+                <div class="p-5">
+                    <h3 class="text-lg font-bold text-slate-800 mb-1 group-hover:text-indigo-600 transition">${b.batchName}</h3>
+                    <p class="text-xs text-gray-400 mb-4 line-clamp-1">${b.description}</p>
+                    
+                    <div class="w-full bg-gray-100 rounded-full h-2 mb-2">
+                        <div class="bg-green-500 h-2 rounded-full" style="width: 15%"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-bold text-gray-400">
+                        <span>15% Completed</span>
+                        <span>View Subjects <i data-lucide="chevron-right" width="10" class="inline"></i></span>
+                    </div>
+                </div>
+            </div>
+        `).join('')}
+        
+        ${enrolled.length === 0 ? `
+            <div class="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
+                <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                    <i data-lucide="lock" width="32"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900">No Batches Purchased</h3>
+                <p class="text-gray-400 text-sm mb-6 max-w-xs mx-auto">You haven't enrolled in any classes yet. Purchase a batch to start learning.</p>
+                <button data-link="classes" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-indigo-500/30 transition">Explore Batches</button>
+            </div>
+        ` : ''}
+    </div>`;
 }
 
 // --- SETTINGS (Enhanced) ---
