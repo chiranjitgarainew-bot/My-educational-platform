@@ -32,7 +32,7 @@ const BATCHES = [
 ];
 
 // ==========================================
-// 2. DATABASE SERVICE (Local Storage)
+// 2. DATABASE SERVICE (Safe Storage Wrapper)
 // ==========================================
 
 const KEYS = {
@@ -45,13 +45,42 @@ const KEYS = {
     MESSAGES: 'app_messages'
 };
 
+// Safe Storage Handler (Works even if LocalStorage is disabled)
+const storage = {
+    memory: {},
+    isAvailable: false,
+    init() {
+        try {
+            localStorage.setItem('test_storage', '1');
+            localStorage.removeItem('test_storage');
+            this.isAvailable = true;
+        } catch(e) {
+            this.isAvailable = false;
+            console.warn('LocalStorage is disabled. Using in-memory fallback.');
+        }
+    },
+    getItem(key) {
+        if(this.isAvailable) return localStorage.getItem(key);
+        return this.memory[key] || null;
+    },
+    setItem(key, value) {
+        if(this.isAvailable) localStorage.setItem(key, value);
+        else this.memory[key] = value;
+    },
+    removeItem(key) {
+        if(this.isAvailable) localStorage.removeItem(key);
+        else delete this.memory[key];
+    }
+};
+storage.init();
+
 const db = {
     _get(key, def) { 
-        try { return JSON.parse(localStorage.getItem(key)) || def; } 
+        try { return JSON.parse(storage.getItem(key)) || def; } 
         catch { return def; } 
     },
     _save(key, val) { 
-        localStorage.setItem(key, JSON.stringify(val)); 
+        storage.setItem(key, JSON.stringify(val)); 
     },
 
     // --- User Management ---
@@ -107,7 +136,7 @@ const db = {
     
     getSession() { return this._get(KEYS.SESSION, null); },
     setSession(u) { this._save(KEYS.SESSION, u); },
-    clearSession() { localStorage.removeItem(KEYS.SESSION); },
+    clearSession() { storage.removeItem(KEYS.SESSION); },
 
     verifyEmail(email, code) {
         const users = this.getUsers();
@@ -1174,14 +1203,7 @@ function pagePurchases() {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Check local storage availability
-    try {
-        localStorage.setItem('test', 'test');
-        localStorage.removeItem('test');
-    } catch(e) {
-        alert('Local Storage is disabled. This app requires Local Storage to function.');
-        return;
-    }
+    // Initialization logic handled by SafeStorage wrapper
     
     // Seed initial content if needed
     seedData();
