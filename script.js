@@ -32,10 +32,8 @@ const BATCHES = [
 ];
 
 // ==========================================
-// 2. HARDCODED USERS (PERMANENT DATA)
+// 2. HARDCODED USERS & UTILS
 // ==========================================
-// এখানে আপনি ইউজারের সমস্ত তথ্য (Email, Purchased Batches, Info) সেট করতে পারেন।
-// অ্যাপ লোড হওয়ার সাথে সাথে এই তথ্যগুলো আপডেট হয়ে যাবে।
 
 const PRELOADED_USERS = [
     {
@@ -47,26 +45,27 @@ const PRELOADED_USERS = [
         isVerified: true,
         phone: '+91 90000 00000',
         address: 'Admin HQ, EdTech City',
+        dob: '1990-01-01',
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
-        enrolledBatches: [], // Admins typically access all, but list here if needed
+        enrolledBatches: [], 
         friends: []
     },
     {
         id: 'STU01',
         name: 'Rahul Sharma',
-        email: 'rahul.sharma@gmail.com', // Specific Gmail
+        email: 'student@study.com', 
         password: '123',
         role: 'student',
         isVerified: true,
-        phone: '+91 98765 43210', // Personal Info
-        address: '12/A, College Street, Kolkata, West Bengal', // Personal Info
+        phone: '+91 98765 43210', 
+        address: '12/A, College Street, Kolkata', 
+        dob: '2008-05-15',
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul',
-        enrolledBatches: ['8', '9'], // Purchases Loaded Here (Class 8 & 9)
+        enrolledBatches: ['8', '9'], 
         friends: []
     }
 ];
 
-// UI Helper: Vibrant Gradients
 const GRADIENTS = [
     'from-blue-500 to-cyan-400',
     'from-fuchsia-500 to-pink-500',
@@ -81,7 +80,62 @@ function getGradient(index) {
 }
 
 // ==========================================
-// 3. DATABASE SERVICE
+// 3. CUSTOM UI SYSTEM (ALERTS & OFFLINE)
+// ==========================================
+
+const UI = {
+    // Custom Alert Modal
+    alert(title, message, type = 'success') {
+        const colors = type === 'error' ? 'text-red-600 bg-red-50' : type === 'info' ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50';
+        const icon = type === 'error' ? 'alert-circle' : type === 'info' ? 'info' : 'check-circle';
+        
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in';
+        modal.innerHTML = `
+            <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${type === 'error' ? 'from-red-500 to-orange-500' : 'from-indigo-500 to-cyan-500'}"></div>
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full ${colors} flex items-center justify-center shadow-sm">
+                    <i data-lucide="${icon}" width="32"></i>
+                </div>
+                <h3 class="text-xl font-black text-center text-slate-800 mb-2">${title}</h3>
+                <p class="text-center text-slate-500 text-sm mb-6">${message}</p>
+                <button id="ui-alert-btn" class="w-full py-3.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 transition shadow-lg shadow-slate-200">Okay, Got it</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        lucide.createIcons();
+        document.getElementById('ui-alert-btn').onclick = () => modal.remove();
+    },
+
+    // Custom Confirm Modal
+    confirm(title, message, onConfirm) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in';
+        modal.innerHTML = `
+            <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up">
+                 <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center animate-bounce">
+                    <i data-lucide="help-circle" width="28"></i>
+                </div>
+                <h3 class="text-xl font-black text-center text-slate-800 mb-2">${title}</h3>
+                <p class="text-center text-slate-500 text-sm mb-6">${message}</p>
+                <div class="flex gap-3">
+                    <button id="ui-cancel-btn" class="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
+                    <button id="ui-confirm-btn" class="flex-1 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">Confirm</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        lucide.createIcons();
+        document.getElementById('ui-cancel-btn').onclick = () => modal.remove();
+        document.getElementById('ui-confirm-btn').onclick = () => {
+            modal.remove();
+            onConfirm();
+        };
+    }
+};
+
+// ==========================================
+// 4. DATABASE SERVICE
 // ==========================================
 
 const KEYS = {
@@ -96,127 +150,71 @@ const KEYS = {
     ACTIVITY: 'app_activity_logs'
 };
 
-// Safe Storage Handler
 const storage = {
     memory: {},
     isAvailable: false,
     init() {
-        try {
-            localStorage.setItem('test_storage', '1');
-            localStorage.removeItem('test_storage');
-            this.isAvailable = true;
-        } catch(e) {
-            this.isAvailable = false;
-        }
+        try { localStorage.setItem('test_storage', '1'); localStorage.removeItem('test_storage'); this.isAvailable = true; } 
+        catch(e) { this.isAvailable = false; }
     },
-    getItem(key) {
-        if(this.isAvailable) return localStorage.getItem(key);
-        return this.memory[key] || null;
-    },
-    setItem(key, value) {
-        if(this.isAvailable) localStorage.setItem(key, value);
-        else this.memory[key] = value;
-    },
-    removeItem(key) {
-        if(this.isAvailable) localStorage.removeItem(key);
-        else delete this.memory[key];
-    }
+    getItem(key) { return this.isAvailable ? localStorage.getItem(key) : (this.memory[key] || null); },
+    setItem(key, value) { if(this.isAvailable) localStorage.setItem(key, value); else this.memory[key] = value; },
+    removeItem(key) { if(this.isAvailable) localStorage.removeItem(key); else delete this.memory[key]; }
 };
 storage.init();
 
 const db = {
-    _get(key, def) { 
-        try { return JSON.parse(storage.getItem(key)) || def; } 
-        catch { return def; } 
-    },
-    _save(key, val) { 
-        storage.setItem(key, JSON.stringify(val)); 
-    },
+    _get(key, def) { try { return JSON.parse(storage.getItem(key)) || def; } catch { return def; } },
+    _save(key, val) { storage.setItem(key, JSON.stringify(val)); },
 
-    // --- User Management ---
     getUsers() { return this._get(KEYS.USERS, {}); },
     getUser(email) { return this.getUsers()[email]; },
     getUserById(id) { return Object.values(this.getUsers()).find(u => u.id === id); },
     
     saveUser(user) {
         const users = this.getUsers();
-        // If first user ever, make admin (fallback)
-        if (Object.keys(users).length === 0 && user.role !== 'admin') { 
-            // user.role = 'admin'; 
-        }
         users[user.email] = user;
         this._save(KEYS.USERS, users);
-        
         const session = this.getSession();
         if(session && session.email === user.email) this.setSession(user);
         return user;
     },
 
-    // Inject Preloaded Users (Forces update from code)
     seedUsers() {
         const users = this.getUsers();
         let changed = false;
         PRELOADED_USERS.forEach(u => {
-            // Check if user exists (by email key)
             if (users[u.email]) {
-                // Update existing user with data from code (merging)
-                // This ensures if you change enrolledBatches in code, it reflects in app
                 const merged = { ...users[u.email], ...u };
-                // We check if anything actually changed to avoid unnecessary writes
-                if (JSON.stringify(users[u.email]) !== JSON.stringify(merged)) {
-                    users[u.email] = merged;
-                    changed = true;
-                }
-            } else {
-                // Create new user if not exists
-                users[u.email] = u;
-                changed = true;
-            }
+                if (JSON.stringify(users[u.email]) !== JSON.stringify(merged)) { users[u.email] = merged; changed = true; }
+            } else { users[u.email] = u; changed = true; }
         });
         if (changed) {
             this._save(KEYS.USERS, users);
-            // Also update current session if it matches a preloaded user
             const session = this.getSession();
-            if (session) {
-                const updatedUser = users[session.email];
-                if (updatedUser) this.setSession(updatedUser);
-            }
+            if (session && users[session.email]) this.setSession(users[session.email]);
         }
     },
 
-    // --- Activity Logging ---
     logActivity(userId, type, description) {
         const logs = this._get(KEYS.ACTIVITY, []);
-        const newLog = {
-            id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-            userId: userId,
-            type: type,
-            description: description,
-            timestamp: Date.now()
-        };
+        const newLog = { id: Date.now().toString(36), userId, type, description, timestamp: Date.now() };
         logs.unshift(newLog);
         if(logs.length > 1000) logs.length = 1000;
         this._save(KEYS.ACTIVITY, logs);
     },
+    getUserLogs(userId) { return this._get(KEYS.ACTIVITY, []).filter(log => log.userId === userId); },
 
-    getUserLogs(userId) {
-        return this._get(KEYS.ACTIVITY, []).filter(log => log.userId === userId);
-    },
-
-    // --- Session (Auto Login Logic) ---
     initiateSession(email) {
         const users = this.getUsers();
         const user = users[email];
         if(!user) return null;
-        
-        user.deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        user.deviceId = 'dev_' + Date.now();
         user.lastLogin = Date.now();
-        
         users[email] = user;
         this._save(KEYS.USERS, users);
         this.setSession(user);
-        
-        this.logActivity(user.id, 'LOGIN', 'User logged in successfully');
+        this.logActivity(user.id, 'LOGIN', 'User logged in');
         return user;
     },
     
@@ -224,10 +222,7 @@ const db = {
         const session = this.getSession();
         if(!session) return false;
         const user = this.getUser(session.email);
-        if(!user || user.deviceId !== session.deviceId) { 
-            this.clearSession(); 
-            return false; 
-        }
+        if(!user || user.deviceId !== session.deviceId) { this.clearSession(); return false; }
         return true;
     },
     
@@ -239,150 +234,73 @@ const db = {
         const users = this.getUsers();
         const user = users[email];
         if (user && user.verificationCode === code) {
-            user.isVerified = true;
-            delete user.verificationCode;
-            users[email] = user;
-            this._save(KEYS.USERS, users);
-            this.logActivity(user.id, 'VERIFY', 'Email verified successfully');
+            user.isVerified = true; delete user.verificationCode;
+            users[email] = user; this._save(KEYS.USERS, users);
+            this.logActivity(user.id, 'VERIFY', 'Email verified');
             return { success: true };
         }
-        return { success: false, msg: 'Invalid Verification Code' };
+        return { success: false, msg: 'Invalid Code' };
     },
 
-    // --- Content ---
     getContent() { return this._get(KEYS.CONTENT, []); },
     getContentById(id) { return this.getContent().find(c => c.id === id); },
-    saveContent(c) { 
-        const all = this.getContent(); 
-        all.unshift(c); 
-        this._save(KEYS.CONTENT, all); 
-    },
-    getChapters(batchId, subject) {
-        return this._get(KEYS.CHAPTERS, [])
-            .filter(c => c.batchId === batchId && c.subject === subject)
-            .sort((a,b) => a.order - b.order);
-    },
-    seedChapters(list) {
-        const all = this._get(KEYS.CHAPTERS, []);
-        this._save(KEYS.CHAPTERS, [...all, ...list]);
-    },
-    hasChapters(batchId) {
-        return this._get(KEYS.CHAPTERS, []).some(c => c.batchId === batchId);
-    },
+    saveContent(c) { const all = this.getContent(); all.unshift(c); this._save(KEYS.CONTENT, all); },
+    getChapters(batchId, subject) { return this._get(KEYS.CHAPTERS, []).filter(c => c.batchId === batchId && c.subject === subject).sort((a,b) => a.order - b.order); },
+    seedChapters(list) { const all = this._get(KEYS.CHAPTERS, []); this._save(KEYS.CHAPTERS, [...all, ...list]); },
+    hasChapters(batchId) { return this._get(KEYS.CHAPTERS, []).some(c => c.batchId === batchId); },
 
-    // --- Coupons ---
     getCoupons() { return this._get(KEYS.COUPONS, []); },
-    saveCoupon(coupon) {
-        const all = this.getCoupons();
-        all.push(coupon);
-        this._save(KEYS.COUPONS, all);
-    },
-    deleteCoupon(code) {
-        let all = this.getCoupons();
-        all = all.filter(c => c.code !== code);
-        this._save(KEYS.COUPONS, all);
-    },
-    validateCoupon(code) {
-        const all = this.getCoupons();
-        return all.find(c => c.code === code);
-    },
+    saveCoupon(c) { const all = this.getCoupons(); all.push(c); this._save(KEYS.COUPONS, all); },
+    deleteCoupon(code) { let all = this.getCoupons(); all = all.filter(c => c.code !== code); this._save(KEYS.COUPONS, all); },
+    validateCoupon(code) { return this.getCoupons().find(c => c.code === code); },
 
-    // --- Enrollment Requests ---
     getRequests() { return this._get(KEYS.REQUESTS, []); },
-    createRequest(req) { 
-        const all = this.getRequests(); 
-        all.unshift(req); 
-        this._save(KEYS.REQUESTS, all); 
-        this.logActivity(req.userId, 'PURCHASE_REQUEST', `Requested enrollment for ${req.batchName}`);
-    },
+    createRequest(req) { const all = this.getRequests(); all.unshift(req); this._save(KEYS.REQUESTS, all); this.logActivity(req.userId, 'PURCHASE_REQUEST', `Request for ${req.batchName}`); },
     approveRequest(id) {
-        const reqs = this.getRequests();
-        const req = reqs.find(r => r.id === id);
+        const reqs = this.getRequests(); const req = reqs.find(r => r.id === id);
         if(req) {
-            req.status = 'approved';
-            this._save(KEYS.REQUESTS, reqs);
-            const users = this.getUsers();
-            const user = Object.values(users).find(u => u.id === req.userId);
+            req.status = 'approved'; this._save(KEYS.REQUESTS, reqs);
+            const users = this.getUsers(); const user = Object.values(users).find(u => u.id === req.userId);
             if(user) {
                 user.enrolledBatches = user.enrolledBatches || [];
                 if(!user.enrolledBatches.includes(req.batchId)) {
-                    user.enrolledBatches.push(req.batchId);
-                    users[user.email] = user;
-                    this._save(KEYS.USERS, users);
-                    this.logActivity(user.id, 'ENROLL_SUCCESS', `Approved for batch: ${req.batchName}`);
+                    user.enrolledBatches.push(req.batchId); users[user.email] = user; this._save(KEYS.USERS, users);
+                    this.logActivity(user.id, 'ENROLL_SUCCESS', `Approved: ${req.batchName}`);
                     const session = this.getSession();
-                    if(session && session.id === user.id) {
-                        session.enrolledBatches = user.enrolledBatches;
-                        this.setSession(session);
-                        if(state.user && state.user.id === user.id) {
-                            state.user.enrolledBatches = user.enrolledBatches;
-                        }
-                    }
+                    if(session && session.id === user.id) { session.enrolledBatches = user.enrolledBatches; this.setSession(session); if(state.user && state.user.id === user.id) state.user.enrolledBatches = user.enrolledBatches; }
                 }
             }
         }
     },
     rejectRequest(id) {
-        const reqs = this.getRequests();
-        const req = reqs.find(r => r.id === id);
-        if(req) {
-            req.status = 'rejected';
-            this._save(KEYS.REQUESTS, reqs);
-            this.logActivity(req.userId, 'ENROLL_REJECT', `Request rejected for batch: ${req.batchName}`);
-        }
+        const reqs = this.getRequests(); const req = reqs.find(r => r.id === id);
+        if(req) { req.status = 'rejected'; this._save(KEYS.REQUESTS, reqs); this.logActivity(req.userId, 'ENROLL_REJECT', `Rejected: ${req.batchName}`); }
     },
 
-    // --- Progress & Chat ---
     saveProgress(p) {
-        const map = this._get(KEYS.PROGRESS, {});
-        const key = `${p.userId}_${p.contentId}`;
+        const map = this._get(KEYS.PROGRESS, {}); const key = `${p.userId}_${p.contentId}`;
         let justCompleted = false;
-        if((p.watchedSeconds / p.totalSeconds) > 0.9 && !p.completed) {
-            p.completed = true;
-            justCompleted = true;
-        } else if(map[key]?.completed) {
-            p.completed = true;
-        }
-        map[key] = p;
-        this._save(KEYS.PROGRESS, map);
-        if(justCompleted) {
-            this.logActivity(p.userId, 'COMPLETION', `Completed video lesson`);
-        }
+        if((p.watchedSeconds / p.totalSeconds) > 0.9 && !p.completed) { p.completed = true; justCompleted = true; } else if(map[key]?.completed) p.completed = true;
+        map[key] = p; this._save(KEYS.PROGRESS, map);
+        if(justCompleted) this.logActivity(p.userId, 'COMPLETION', `Completed lesson`);
     },
     getUserProgress(uid) { return Object.values(this._get(KEYS.PROGRESS, {})).filter(p => p.userId === uid); },
-    getMessages(u1, u2) {
-        return this._get(KEYS.MESSAGES, [])
-            .filter(m => (m.senderId === u1 && m.receiverId === u2) || (m.senderId === u2 && m.receiverId === u1))
-            .sort((a,b) => a.timestamp - b.timestamp);
-    },
-    sendMessage(msg) {
-        const all = this._get(KEYS.MESSAGES, []);
-        all.push(msg);
-        this._save(KEYS.MESSAGES, all);
-    },
+    getMessages(u1, u2) { return this._get(KEYS.MESSAGES, []).filter(m => (m.senderId === u1 && m.receiverId === u2) || (m.senderId === u2 && m.receiverId === u1)).sort((a,b) => a.timestamp - b.timestamp); },
+    sendMessage(msg) { const all = this._get(KEYS.MESSAGES, []); all.push(msg); this._save(KEYS.MESSAGES, all); },
     addFriend(userId, friendId) {
-        const users = this.getUsers();
-        const user = Object.values(users).find(u => u.id === userId);
-        const friend = Object.values(users).find(u => u.id === friendId);
+        const users = this.getUsers(); const user = Object.values(users).find(u => u.id === userId); const friend = Object.values(users).find(u => u.id === friendId);
         if(user && friend) {
-            user.friends = user.friends || [];
-            friend.friends = friend.friends || [];
-            if(!user.friends.includes(friendId)) {
-                user.friends.push(friendId);
-                this.logActivity(userId, 'FRIEND', `Added friend: ${friend.name}`);
-            }
+            user.friends = user.friends || []; friend.friends = friend.friends || [];
+            if(!user.friends.includes(friendId)) { user.friends.push(friendId); this.logActivity(userId, 'FRIEND', `Added friend: ${friend.name}`); }
             if(!friend.friends.includes(userId)) friend.friends.push(userId);
-            users[user.email] = user;
-            users[friend.email] = friend;
-            this._save(KEYS.USERS, users);
-            const session = this.getSession();
-            if(session && session.id === user.id) this.setSession(user);
+            users[user.email] = user; users[friend.email] = friend; this._save(KEYS.USERS, users);
+            const session = this.getSession(); if(session && session.id === user.id) this.setSession(user);
         }
     }
 };
 
 // ==========================================
-// 4. APP STATE & ROUTING
+// 5. APP STATE & ROUTING
 // ==========================================
 
 const state = {
@@ -405,43 +323,55 @@ document.addEventListener('click', e => {
     const link = e.target.closest('[data-link]');
     if(link) {
         e.preventDefault();
-        const route = link.dataset.link;
-        const params = link.dataset.params ? JSON.parse(link.dataset.params) : {};
-        navigate(route, params);
+        navigate(link.dataset.link, link.dataset.params ? JSON.parse(link.dataset.params) : {});
     }
 });
 
-// Seed data
 async function seedData() {
-    // 1. Seed Hardcoded Users (Updates existing ones too)
     db.seedUsers();
-
-    // 2. Seed Chapters if not exist
     if(!db.hasChapters('8')) {
-        const ch = [];
-        for(let i=1; i<=5; i++) ch.push({ id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${i}: Demo Math`, order:i });
-        db.seedChapters(ch);
+        const ch = []; for(let i=1; i<=5; i++) ch.push({ id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${i}: Demo Math`, order:i }); db.seedChapters(ch);
     }
     if(!db.hasChapters('9')) {
-        const ch = [];
-        for(let i=1; i<=5; i++) ch.push({ id:`s9_${i}`, batchId:'9', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${i}: Physics Concept`, order:i });
-        db.seedChapters(ch);
+        const ch = []; for(let i=1; i<=5; i++) ch.push({ id:`s9_${i}`, batchId:'9', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${i}: Physics Concept`, order:i }); db.seedChapters(ch);
     }
     if(!db.hasChapters('10')) {
-        const ch = [];
-        for(let i=1; i<=5; i++) ch.push({ id:`s10_${i}`, batchId:'10', subject:'জীবন বিজ্ঞান (Life Science)', title:`Chapter ${i}: Biology Intro`, order:i });
-        db.seedChapters(ch);
+        const ch = []; for(let i=1; i<=5; i++) ch.push({ id:`s10_${i}`, batchId:'10', subject:'জীবন বিজ্ঞান (Life Science)', title:`Chapter ${i}: Biology Intro`, order:i }); db.seedChapters(ch);
     }
 }
 
 // ==========================================
-// 5. MAIN RENDERER
+// 6. MAIN RENDERER & OFFLINE LOGIC
 // ==========================================
+
+function renderOfflinePage() {
+    return `
+    <div class="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+        <div class="w-32 h-32 bg-slate-800 rounded-full flex items-center justify-center mb-8 relative">
+            <div class="absolute inset-0 bg-red-500 rounded-full opacity-20 animate-ping"></div>
+            <i data-lucide="wifi-off" class="text-red-500 w-16 h-16"></i>
+        </div>
+        <h1 class="text-3xl font-black text-white mb-2">You are Offline</h1>
+        <p class="text-slate-400 mb-8 max-w-xs mx-auto leading-relaxed">It seems you lost your internet connection. Please reconnect to access your classroom.</p>
+        <button onclick="window.location.reload()" class="px-8 py-3 bg-white text-slate-900 rounded-xl font-bold hover:scale-105 transition shadow-lg shadow-white/10 flex items-center gap-2">
+            <i data-lucide="refresh-cw" width="18"></i> Try Reconnecting
+        </button>
+    </div>`;
+}
 
 function renderApp() {
     const app = document.getElementById('app');
 
-    // Security Check for Multi-device
+    // 1. Offline Check
+    if (!navigator.onLine) {
+        app.innerHTML = renderOfflinePage();
+        lucide.createIcons();
+        window.addEventListener('online', renderApp);
+        return;
+    }
+    window.addEventListener('offline', renderApp);
+
+    // 2. Session Check
     if(!state.checkInterval) {
         state.checkInterval = setInterval(() => {
             if(state.user && !db.validateSession()) {
@@ -449,13 +379,12 @@ function renderApp() {
                 state.checkInterval = null;
                 state.user = null;
                 db.clearSession();
-                alert('Logged out due to multi-device login.');
+                UI.alert('Session Expired', 'You have been logged out due to login on another device.', 'error');
                 renderApp();
             }
         }, 5000);
     }
 
-    // Auto Login Logic: Check localStorage immediately
     const session = db.getSession();
     
     if (!session) {
@@ -472,7 +401,7 @@ function renderApp() {
 }
 
 // ==========================================
-// 6. VIEW COMPONENTS
+// 7. VIEW COMPONENTS
 // ==========================================
 
 // --- AUTH PAGE ---
@@ -490,7 +419,7 @@ function renderAuthPage() {
                 <p class="text-slate-500 text-sm mt-2 font-medium">Secure Login &bull; One Device Policy</p>
                 <div class="mt-4 p-3 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
                     <strong>Demo Login:</strong><br>
-                    Student: rahul.sharma@gmail.com / 123<br>
+                    Student: student@study.com / 123<br>
                     Admin: admin@study.com / admin
                 </div>
             </div>
@@ -531,7 +460,6 @@ function attachAuthLogic() {
             if(db.getUser(email)) { els.msg.innerText = 'Account exists.'; els.msg.className = 'text-center text-red-500 font-bold mb-2'; return; }
             const studentId = 'STU' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000);
             db.saveUser({ id: studentId, name, email, password: pass, role: 'student', isVerified: false, verificationCode: '123456', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, enrolledBatches: [], friends: [] });
-            db.logActivity(studentId, 'SIGNUP', 'Account created successfully');
             mode = 'verify'; tempEmail = email; els.title.innerText = 'Verify Email'; els.btn.innerText = 'Verify Code'; els.name.classList.add('hidden'); els.pass.classList.add('hidden'); els.otp.classList.remove('hidden'); els.msg.innerText = 'Code sent (123456)'; els.msg.className = 'text-center text-green-600 font-bold mb-2';
         } else if (mode === 'verify') {
             const res = db.verifyEmail(tempEmail, otp);
@@ -554,14 +482,14 @@ function renderLayout(content) {
         <header class="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all">
             <button id="menu-btn" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="menu" class="text-gray-700"></i></button>
             <h1 class="font-bold text-indigo-600 text-lg tracking-tight">Study Platform</h1>
-            <div class="cursor-pointer" data-link="profile"><img src="${u.avatar}" class="w-9 h-9 rounded-full border border-gray-300 shadow-sm hover:scale-105 transition"></div>
+            <div class="cursor-pointer" data-link="profile"><img src="${u.avatar}" class="w-9 h-9 rounded-full border border-gray-300 shadow-sm hover:scale-105 transition object-cover"></div>
         </header>
         <div id="sidebar-overlay" class="fixed inset-0 bg-black/40 z-40 hidden backdrop-blur-sm transition-opacity"></div>
         <div id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl transform -translate-x-full transition-transform duration-300">
             <div class="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white relative">
                 <button id="close-menu" class="absolute top-4 right-4 text-white/80 hover:text-white"><i data-lucide="x"></i></button>
                 <div class="flex flex-col items-center mt-4">
-                    <img src="${u.avatar}" class="w-16 h-16 rounded-full border-4 border-white/20 mb-3 shadow-lg">
+                    <img src="${u.avatar}" class="w-16 h-16 rounded-full border-4 border-white/20 mb-3 shadow-lg object-cover">
                     <h3 class="font-bold text-lg">${u.name}</h3>
                     <div class="mt-1 px-3 py-1 bg-white/20 rounded-full text-[10px] font-mono tracking-wider">ID: ${u.id}</div>
                 </div>
@@ -602,7 +530,12 @@ function attachLayoutLogic() {
     document.getElementById('menu-btn').onclick = () => { sb.classList.remove('-translate-x-full'); ov.classList.remove('hidden'); };
     const close = () => { sb.classList.add('-translate-x-full'); ov.classList.add('hidden'); };
     document.getElementById('close-menu').onclick = close; ov.onclick = close;
-    document.getElementById('logout-btn').onclick = () => { if(confirm('Logout?')) { db.clearSession(); renderApp(); } };
+    document.getElementById('logout-btn').onclick = () => { 
+        UI.confirm('Sign Out?', 'Are you sure you want to log out of your account?', () => {
+            db.clearSession(); 
+            renderApp();
+        });
+    };
 }
 
 // --- ROUTER ---
@@ -621,6 +554,7 @@ function renderCurrentPage() {
         case 'inbox': return pageInbox();
         case 'chat': return pageChat();
         case 'profile': return pageProfile();
+        case 'edit-profile': return pageEditProfile(); // New Route
         case 'purchases': return pagePurchases();
         case 'settings': return pageSettings();
         case 'help': return pageHelp();
@@ -634,10 +568,11 @@ function attachPageLogic() {
     if(state.route === 'player') attachPlayerLogic();
     if(state.route === 'chat') attachChatLogic();
     if(state.route === 'settings') attachSettingsLogic();
+    if(state.route === 'edit-profile') attachEditProfileLogic();
 }
 
 // ==========================================
-// 6. INDIVIDUAL PAGES (UPDATED UI)
+// 8. INDIVIDUAL PAGES (PAGES)
 // ==========================================
 
 function pageHome() {
@@ -750,13 +685,14 @@ function pagePayment() {
 function attachPaymentLogic() {
     window.applyCoupon = () => {
         const code = document.getElementById('coupon-code').value.toUpperCase().trim();
-        if(!code) return alert('Enter a code');
+        if(!code) return UI.alert('Oops!', 'Please enter a coupon code', 'error');
         const coupon = db.validateCoupon(code);
         if(coupon) {
             state.tempPayment = { couponApplied: code, discountAmount: parseInt(coupon.amount) };
             renderApp();
+            UI.alert('Success!', `Coupon Applied! You saved ₹${coupon.amount}`, 'success');
         } else {
-            alert('Invalid Coupon Code');
+            UI.alert('Invalid Coupon', 'This coupon code is not valid.', 'error');
         }
     };
     window.removeCoupon = () => { state.tempPayment = { couponApplied: null, discountAmount: 0 }; renderApp(); };
@@ -782,7 +718,7 @@ function attachPaymentLogic() {
             method: 'PhonePe Gateway'
         });
         modal.classList.add('hidden');
-        alert('Payment Successful via PhonePe! Enrollment request sent.');
+        UI.alert('Request Sent!', 'Your enrollment request has been sent to the admin.', 'success');
         navigate('profile');
     };
 
@@ -802,7 +738,7 @@ function attachPaymentLogic() {
             status: 'pending',
             method: 'Manual UPI'
         });
-        alert('Manual payment request submitted! Admin will verify.');
+        UI.alert('Request Sent!', 'Manual payment request submitted for verification.', 'info');
         navigate('profile');
     };
 }
@@ -850,33 +786,26 @@ function pagePurchases() {
     </div>`;
 }
 
-// --- COLORFUL SUBJECT PAGE ---
 function pageSubjects() {
     const b = BATCHES.find(x => x.id === state.params.id);
     if(!state.user.enrolledBatches.includes(b.id)) { navigate('payment', {id: b.id}); return ''; }
 
     return `
     <div class="pb-10">
-        <!-- Header -->
         <div class="bg-slate-900 -m-4 p-8 pb-16 mb-8 text-white rounded-b-[40px] shadow-lg relative overflow-hidden">
              <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
-             
              <button onclick="window.history.back()" class="mb-6 bg-white/10 hover:bg-white/20 p-2 rounded-full transition backdrop-blur-md"><i data-lucide="arrow-left"></i></button>
-             
              <span class="px-3 py-1 bg-indigo-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-widest mb-2 inline-block">My Classroom</span>
              <h1 class="text-2xl font-black leading-tight">${b.batchName}</h1>
              <p class="text-slate-400 text-sm mt-2">Select a subject to view chapters</p>
         </div>
-        
-        <!-- Vibrant Subjects Grid -->
         <div class="space-y-4 px-2 -mt-10 relative z-10">
             ${b.subjects.map((sub, idx) => {
                 const gradient = getGradient(idx);
                 return `
                 <div data-link="chapters" data-params='{"bid":"${b.id}","sub":"${encodeURIComponent(sub)}"}' 
                      class="bg-white p-5 rounded-2xl shadow-md border-l-4 hover:border-l-8 transition-all duration-300 flex items-center justify-between cursor-pointer group"
-                     style="border-color: #6366f1;"> <!-- Fallback if needed, but classes work better -->
-                    
+                     style="border-color: #6366f1;"> 
                     <div class="flex items-center gap-4">
                         <div class="w-16 h-16 bg-gradient-to-br ${gradient} text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:scale-105 transition-transform duration-300">
                             ${sub[0]}
@@ -895,39 +824,26 @@ function pageSubjects() {
     </div>`;
 }
 
-// --- COLORFUL CHAPTER PAGE ---
 function pageChapters() {
-    const { bid, sub } = state.params; 
-    const sName = decodeURIComponent(sub); 
-    const chapters = db.getChapters(bid, sName);
-
+    const { bid, sub } = state.params; const sName = decodeURIComponent(sub); const chapters = db.getChapters(bid, sName);
     if(chapters.length === 0) { seedData().then(() => renderApp()); return '<div class="text-center mt-20"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div><p class="mt-4 text-gray-500">Loading Content...</p></div>'; }
-
     return `
     <div>
         <div class="flex items-center gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 sticky top-4 z-20">
             <button onclick="window.history.back()" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="arrow-left" width="20"></i></button>
             <h1 class="text-lg font-bold truncate flex-1">${sName}</h1>
         </div>
-        
         <div class="grid gap-4">
             ${chapters.map((ch, idx) => `
-                <div data-link="lectures" data-params='{"cid":"${ch.id}"}' 
-                     class="glass p-5 rounded-2xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition relative overflow-hidden group bg-gradient-to-r from-white to-slate-50">
-                    
-                    <!-- Decorative Side Bar -->
+                <div data-link="lectures" data-params='{"cid":"${ch.id}"}' class="glass p-5 rounded-2xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition relative overflow-hidden group bg-gradient-to-r from-white to-slate-50">
                     <div class="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b ${getGradient(idx)}"></div>
-                    
                     <div class="flex justify-between items-start pl-4">
                         <div>
-                            <div class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Chapter ${String(idx+1).padStart(2, '0')}
-                            </div>
+                            <div class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> Chapter ${String(idx+1).padStart(2, '0')}</div>
                             <h3 class="font-bold text-lg text-gray-900 mt-1 group-hover:text-indigo-600 transition">${ch.title}</h3>
                         </div>
                         <i data-lucide="play-circle" class="text-gray-300 group-hover:text-indigo-600 transition transform group-hover:scale-110"></i>
                     </div>
-                    
                     <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs font-bold text-gray-400 pl-4">
                          <span class="flex items-center gap-1 bg-white px-2 py-1 rounded shadow-sm"><i data-lucide="video" width="12"></i> Lectures</span>
                     </div>
@@ -938,35 +854,26 @@ function pageChapters() {
 }
 
 function pageLectures() {
-    const { cid } = state.params; 
-    const contents = db.getContent().filter(c => c.chapterId === cid); 
-    const progress = db.getUserProgress(state.user.id);
-    
+    const { cid } = state.params; const contents = db.getContent().filter(c => c.chapterId === cid); const progress = db.getUserProgress(state.user.id);
     return `
     <div>
         <div class="flex items-center gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 sticky top-4 z-20">
             <button onclick="window.history.back()" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="arrow-left" width="20"></i></button>
             <h1 class="text-lg font-bold">Class Lectures</h1>
         </div>
-
         <div class="grid gap-5">
             ${contents.map((c, idx) => {
                 const done = progress.find(p => p.contentId === c.id && p.completed);
                 return `
                 <div data-link="player" data-params='{"id":"${c.id}"}' class="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                     <div class="aspect-video bg-slate-900 relative flex items-center justify-center overflow-hidden">
-                        ${c.thumbnail 
-                            ? `<img src="${c.thumbnail}" class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition duration-700">` 
-                            : `<div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900"></div>`
-                        }
+                        ${c.thumbnail ? `<img src="${c.thumbnail}" class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition duration-700">` : `<div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900"></div>`}
                         <div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition"></div>
-                        
                         <div class="absolute inset-0 flex items-center justify-center z-10">
                             <div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 shadow-lg group-hover:scale-110 group-hover:bg-indigo-600/90 transition duration-300">
                                 ${done ? '<i data-lucide="check" class="text-white" width="24"></i>' : '<i data-lucide="play" fill="currentColor" width="24"></i>'}
                             </div>
                         </div>
-                        
                         ${done ? '<div class="absolute top-3 right-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">COMPLETED</div>' : ''}
                     </div>
                     <div class="p-5">
@@ -975,46 +882,23 @@ function pageLectures() {
                     </div>
                 </div>`;
             }).join('')}
-            
-            ${contents.length === 0 ? `
-                <div class="text-center py-16 border-2 border-dashed border-gray-200 rounded-3xl">
-                    <div class="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400"><i data-lucide="video-off"></i></div>
-                    <p class="text-gray-400 font-bold">No lectures uploaded yet.</p>
-                </div>
-            ` : ''}
+            ${contents.length === 0 ? `<div class="text-center py-16 border-2 border-dashed border-gray-200 rounded-3xl"><div class="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400"><i data-lucide="video-off"></i></div><p class="text-gray-400 font-bold">No lectures uploaded yet.</p></div>` : ''}
         </div>
-
-        ${state.user.role === 'admin' ? `
-            <button data-link="admin-upload" 
-                    class="fixed bottom-24 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition z-50 animate-bounce">
-                <i data-lucide="plus"></i>
-            </button>
-        ` : ''}
+        ${state.user.role === 'admin' ? `<button data-link="admin-upload" class="fixed bottom-24 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition z-50 animate-bounce"><i data-lucide="plus"></i></button>` : ''}
     </div>`;
 }
 
 function pagePlayer() {
-    const c = db.getContentById(state.params.id); 
-    if(!c) return '<div class="p-10 text-center">Video Not Found</div>';
-    
+    const c = db.getContentById(state.params.id); if(!c) return '<div class="p-10 text-center">Video Not Found</div>';
     return `
     <div class="bg-black min-h-screen text-white flex flex-col">
         <div class="aspect-video bg-black relative sticky top-0 z-50 shadow-2xl">
-            ${c.videoUrl.includes('youtube') 
-                ? `<iframe src="${c.videoUrl}" class="w-full h-full" allowfullscreen allow="autoplay"></iframe>` 
-                : `<video id="video-el" controls class="w-full h-full" poster="${c.thumbnail || ''}"></video>`
-            }
-            <button onclick="window.history.back()" class="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition text-white border border-white/10">
-                <i data-lucide="arrow-left"></i>
-            </button>
+            ${c.videoUrl.includes('youtube') ? `<iframe src="${c.videoUrl}" class="w-full h-full" allowfullscreen allow="autoplay"></iframe>` : `<video id="video-el" controls class="w-full h-full" poster="${c.thumbnail || ''}"></video>`}
+            <button onclick="window.history.back()" class="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition text-white border border-white/10"><i data-lucide="arrow-left"></i></button>
         </div>
         <div class="p-6 flex-1 bg-slate-900">
             <h1 class="text-xl font-bold leading-tight text-white">${c.title}</h1>
-            <div class="flex items-center gap-3 mt-4 mb-6">
-                <span class="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider text-gray-300">Lecture</span>
-                <span class="text-xs text-gray-500">&bull;</span>
-                <span class="text-xs text-gray-400 font-bold">Updated Recently</span>
-            </div>
+            <div class="flex items-center gap-3 mt-4 mb-6"><span class="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider text-gray-300">Lecture</span><span class="text-xs text-gray-500">&bull;</span><span class="text-xs text-gray-400 font-bold">Updated Recently</span></div>
             <p class="text-slate-400 text-sm leading-relaxed border-t border-white/10 pt-4">${c.description}</p>
         </div>
     </div>`;
@@ -1028,33 +912,17 @@ function attachPlayerLogic() {
     }
 }
 
-// --- ADMIN PANEL (Colorful Requests) ---
 function pageAdmin() {
     if(state.user.role !== 'admin') return '<div class="p-10 text-center text-red-500">Access Denied</div>';
-    const reqs = db.getRequests();
-    const coupons = db.getCoupons();
-    const users = Object.values(db.getUsers());
-    const tab = state.params.tab || 'requests';
-
-    // Stats
-    const totalUsers = users.length;
-    const totalRevenue = reqs.filter(r => r.status === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
+    const reqs = db.getRequests(); const coupons = db.getCoupons(); const users = Object.values(db.getUsers()); const tab = state.params.tab || 'requests';
+    const totalUsers = users.length; const totalRevenue = reqs.filter(r => r.status === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0);
     return `
     <div class="mb-6">
         <h2 class="text-2xl font-bold mb-4">Admin Dashboard</h2>
-        
         <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 rounded-2xl text-white shadow-lg shadow-indigo-200">
-                <div class="text-xs font-bold uppercase opacity-80 mb-1">Total Students</div>
-                <div class="text-3xl font-black">${totalUsers}</div>
-            </div>
-            <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200">
-                <div class="text-xs font-bold uppercase opacity-80 mb-1">Total Revenue</div>
-                <div class="text-3xl font-black">₹${totalRevenue.toLocaleString()}</div>
-            </div>
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 rounded-2xl text-white shadow-lg shadow-indigo-200"><div class="text-xs font-bold uppercase opacity-80 mb-1">Total Students</div><div class="text-3xl font-black">${totalUsers}</div></div>
+            <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200"><div class="text-xs font-bold uppercase opacity-80 mb-1">Total Revenue</div><div class="text-3xl font-black">₹${totalRevenue.toLocaleString()}</div></div>
         </div>
-
         <div class="flex justify-between items-center mb-4">
             <div class="flex p-1 bg-white border border-gray-200 rounded-xl overflow-x-auto no-scrollbar">
                 <button onclick="navigate('admin', {tab:'requests'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='requests' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Requests</button>
@@ -1064,96 +932,38 @@ function pageAdmin() {
             <button data-link="admin-upload" class="bg-indigo-600 text-white p-2 rounded-lg shadow-md hover:bg-indigo-700 ml-2"><i data-lucide="upload" class="w-5 h-5"></i></button>
         </div>
     </div>
-
     ${tab === 'requests' ? `
         <div class="space-y-4">
-            <div class="p-4 bg-orange-50 border border-orange-100 rounded-xl font-bold text-orange-700 flex justify-between items-center shadow-sm">
-                <span>Pending Approvals</span>
-                <span class="bg-orange-500 text-white px-2 py-1 rounded text-xs">${reqs.filter(r=>r.status==='pending').length}</span>
-            </div>
-            
+            <div class="p-4 bg-orange-50 border border-orange-100 rounded-xl font-bold text-orange-700 flex justify-between items-center shadow-sm"><span>Pending Approvals</span><span class="bg-orange-500 text-white px-2 py-1 rounded text-xs">${reqs.filter(r=>r.status==='pending').length}</span></div>
             <div class="space-y-3">
                 ${reqs.filter(r => r.status === 'pending').map(r => `
                     <div class="p-5 bg-white border-l-4 border-orange-400 rounded-xl shadow-sm flex flex-col gap-3">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <div class="font-bold text-slate-800 text-lg">${r.userName}</div>
-                                <div class="text-sm text-gray-500 font-medium">${r.batchName}</div>
-                            </div>
-                            <span class="text-lg font-black text-slate-700">₹${r.amount}</span>
-                        </div>
-                        
+                        <div class="flex justify-between items-start"><div><div class="font-bold text-slate-800 text-lg">${r.userName}</div><div class="text-sm text-gray-500 font-medium">${r.batchName}</div></div><span class="text-lg font-black text-slate-700">₹${r.amount}</span></div>
                         <div class="flex justify-between items-center border-t border-gray-100 pt-3">
                             <div class="text-xs text-gray-400 font-bold bg-gray-50 px-2 py-1 rounded uppercase">${r.method || 'Manual'}</div>
-                            <div class="flex gap-2">
-                                <button onclick="approvePay('${r.id}')" class="px-4 py-2 bg-green-500 text-white rounded-lg font-bold text-xs hover:bg-green-600 shadow-sm flex items-center gap-1"><i data-lucide="check" width="14"></i> Approve</button>
-                                <button onclick="rejectPay('${r.id}')" class="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs hover:bg-red-200">Reject</button>
-                            </div>
+                            <div class="flex gap-2"><button onclick="approvePay('${r.id}')" class="px-4 py-2 bg-green-500 text-white rounded-lg font-bold text-xs hover:bg-green-600 shadow-sm flex items-center gap-1"><i data-lucide="check" width="14"></i> Approve</button><button onclick="rejectPay('${r.id}')" class="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs hover:bg-red-200">Reject</button></div>
                         </div>
                     </div>`).join('')}
                 ${reqs.filter(r => r.status === 'pending').length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">No pending requests found.</div>' : ''}
             </div>
         </div>
     ` : tab === 'users' ? `
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="divide-y divide-gray-100">
-                ${users.map(u => `
-                    <div class="p-4 flex items-center gap-3 hover:bg-gray-50 transition">
-                        <img src="${u.avatar}" class="w-10 h-10 rounded-full bg-gray-200 border border-gray-300">
-                        <div class="flex-1">
-                            <div class="font-bold text-slate-800 text-sm">${u.name} ${u.role==='admin'?'<span class="text-indigo-600">(Admin)</span>':''}</div>
-                            <div class="text-xs text-gray-500">${u.email}</div>
-                        </div>
-                        <div class="text-xs font-bold px-2 py-1 rounded ${u.isVerified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${u.isVerified ? 'Verified' : 'Pending'}</div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"><div class="divide-y divide-gray-100">
+                ${users.map(u => `<div class="p-4 flex items-center gap-3 hover:bg-gray-50 transition"><img src="${u.avatar}" class="w-10 h-10 rounded-full bg-gray-200 border border-gray-300"><div class="flex-1"><div class="font-bold text-slate-800 text-sm">${u.name} ${u.role==='admin'?'<span class="text-indigo-600">(Admin)</span>':''}</div><div class="text-xs text-gray-500">${u.email}</div></div><div class="text-xs font-bold px-2 py-1 rounded ${u.isVerified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${u.isVerified ? 'Verified' : 'Pending'}</div></div>`).join('')}
+            </div></div>
     ` : `
         <div class="space-y-6">
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <h3 class="font-bold text-gray-700 mb-3">Create Coupon</h3>
-                <form id="create-coupon-form" class="flex gap-2">
-                    <input type="text" id="new-code" placeholder="Code" required class="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm uppercase font-bold outline-none">
-                    <input type="number" id="new-amount" placeholder="₹" required class="w-20 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none">
-                    <button type="submit" class="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-sm">Add</button>
-                </form>
-            </div>
-            
-            <div class="space-y-3">
-                ${coupons.map(c => `
-                    <div class="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <div class="bg-green-100 p-2 rounded-lg text-green-600"><i data-lucide="tag" width="20"></i></div>
-                            <div>
-                                <div class="font-black text-slate-800 tracking-wider">${c.code}</div>
-                                <div class="text-xs text-green-600 font-bold">Flat ₹${c.amount} OFF</div>
-                            </div>
-                        </div>
-                        <button onclick="deleteCoupon('${c.code}')" class="text-gray-400 p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition"><i data-lucide="trash-2" width="16"></i></button>
-                    </div>
-                `).join('')}
-                ${coupons.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No active coupons.</div>' : ''}
-            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><h3 class="font-bold text-gray-700 mb-3">Create Coupon</h3><form id="create-coupon-form" class="flex gap-2"><input type="text" id="new-code" placeholder="Code" required class="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm uppercase font-bold outline-none"><input type="number" id="new-amount" placeholder="₹" required class="w-20 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none"><button type="submit" class="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-sm">Add</button></form></div>
+            <div class="space-y-3">${coupons.map(c => `<div class="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex justify-between items-center"><div class="flex items-center gap-3"><div class="bg-green-100 p-2 rounded-lg text-green-600"><i data-lucide="tag" width="20"></i></div><div><div class="font-black text-slate-800 tracking-wider">${c.code}</div><div class="text-xs text-green-600 font-bold">Flat ₹${c.amount} OFF</div></div></div><button onclick="deleteCoupon('${c.code}')" class="text-gray-400 p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition"><i data-lucide="trash-2" width="16"></i></button></div>`).join('')}${coupons.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No active coupons.</div>' : ''}</div>
         </div>
     `}`;
 }
-
 function attachAdminLogic() {
-    window.approvePay = (id) => { if(confirm('Approve?')) { db.approveRequest(id); renderApp(); } };
-    window.rejectPay = (id) => { if(confirm('Reject?')) { db.rejectRequest(id); renderApp(); } };
-    
+    window.approvePay = (id) => UI.confirm('Approve Request?', 'Are you sure?', () => { db.approveRequest(id); renderApp(); });
+    window.rejectPay = (id) => UI.confirm('Reject Request?', 'Are you sure?', () => { db.rejectRequest(id); renderApp(); });
     const form = document.getElementById('create-coupon-form');
-    if(form) {
-        form.onsubmit = (e) => {
-            e.preventDefault();
-            const code = document.getElementById('new-code').value.toUpperCase().trim();
-            const amount = document.getElementById('new-amount').value;
-            db.saveCoupon({ code, amount });
-            renderApp();
-        };
-    }
-    window.deleteCoupon = (code) => { if(confirm('Delete?')) { db.deleteCoupon(code); renderApp(); } };
+    if(form) form.onsubmit = (e) => { e.preventDefault(); const code = document.getElementById('new-code').value.toUpperCase().trim(); const amount = document.getElementById('new-amount').value; db.saveCoupon({ code, amount }); renderApp(); };
+    window.deleteCoupon = (code) => UI.confirm('Delete Coupon?', 'Cannot be undone.', () => { db.deleteCoupon(code); renderApp(); });
 }
 
 function pageAdminUpload() {
@@ -1163,15 +973,12 @@ function pageAdminUpload() {
 }
 function attachAdminUploadLogic() {
     const form = document.getElementById('upload-form');
-    if(form) {
-        form.onsubmit = (e) => {
-            e.preventDefault(); const chId = document.getElementById('chapter-select').value; const title = document.getElementById('vid-title').value; const desc = document.getElementById('vid-desc').value; const url = document.getElementById('vid-url').value; const thumb = document.getElementById('vid-thumb').value;
-            if(!chId) { alert('Select chapter'); return; }
-            const chapter = db.getChapters(null, null).find(c => c.id === chId) || {batchId:'8', chapterId: chId};
-            db.saveContent({ id: Date.now().toString(), batchId: chapter.batchId, chapterId: chId, title, description: desc, videoUrl: url, thumbnail: thumb, duration: 600, type: 'video' });
-            alert('Uploaded!'); navigate('lectures', {cid: chId});
-        };
-    }
+    if(form) form.onsubmit = (e) => { e.preventDefault(); const chId = document.getElementById('chapter-select').value; const title = document.getElementById('vid-title').value; const desc = document.getElementById('vid-desc').value; const url = document.getElementById('vid-url').value; const thumb = document.getElementById('vid-thumb').value;
+        if(!chId) return UI.alert('Error', 'Select chapter', 'error');
+        const chapter = db.getChapters(null, null).find(c => c.id === chId) || {batchId:'8', chapterId: chId};
+        db.saveContent({ id: Date.now().toString(), batchId: chapter.batchId, chapterId: chId, title, description: desc, videoUrl: url, thumbnail: thumb, duration: 600, type: 'video' });
+        UI.alert('Success', 'Video uploaded successfully!', 'success'); navigate('lectures', {cid: chId});
+    };
 }
 
 function pageInbox() {
@@ -1187,7 +994,96 @@ function attachChatLogic() {
     if(form) { const box = document.getElementById('chat-box'); box.scrollTop = box.scrollHeight; form.onsubmit = e => { e.preventDefault(); const input = document.getElementById('chat-in'); const txt = input.value.trim(); if(!txt) return; db.sendMessage({ id: Date.now().toString(), senderId: state.user.id, receiverId: state.params.fid, text: txt, timestamp: Date.now(), isRead: false }); renderApp(); }; }
 }
 
-// --- PROFILE PAGE (Colorful & Detailed) ---
+// --- ADVANCED EDIT PROFILE PAGE ---
+function pageEditProfile() {
+    const u = state.user;
+    return `
+    <div class="pb-10">
+        <div class="flex items-center gap-3 mb-6">
+            <button onclick="window.history.back()" class="p-2 bg-white rounded-full border border-gray-200"><i data-lucide="arrow-left"></i></button>
+            <h1 class="text-2xl font-bold">Edit Profile</h1>
+        </div>
+
+        <form id="edit-profile-form" class="space-y-6">
+            <!-- Avatar Upload -->
+            <div class="flex flex-col items-center justify-center">
+                <div class="relative group cursor-pointer" id="avatar-container">
+                    <img src="${u.avatar}" id="avatar-preview" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover bg-white">
+                    <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm">
+                        <i data-lucide="camera" class="text-white w-8 h-8"></i>
+                    </div>
+                </div>
+                <input type="file" id="avatar-input" accept="image/*" class="hidden">
+                <p class="text-xs text-slate-400 mt-2 font-bold">Tap to change photo</p>
+            </div>
+
+            <!-- Form Fields -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
+                    <input type="text" id="edit-name" value="${u.name}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Email Address (Read-only)</label>
+                    <input type="text" value="${u.email}" disabled class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-500 cursor-not-allowed">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Phone Number</label>
+                    <input type="tel" id="edit-phone" value="${u.phone || ''}" placeholder="+91..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Date of Birth</label>
+                    <input type="date" id="edit-dob" value="${u.dob || ''}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Address</label>
+                    <textarea id="edit-address" rows="3" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20">${u.address || ''}</textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg shadow-xl shadow-slate-200 hover:scale-[1.02] transition">Save Changes</button>
+        </form>
+    </div>`;
+}
+
+function attachEditProfileLogic() {
+    const container = document.getElementById('avatar-container');
+    const input = document.getElementById('avatar-input');
+    const preview = document.getElementById('avatar-preview');
+    const form = document.getElementById('edit-profile-form');
+
+    // Handle Image Upload
+    container.onclick = () => input.click();
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Handle Save
+    form.onsubmit = (e) => {
+        e.preventDefault();
+        const updatedUser = { ...state.user };
+        
+        updatedUser.name = document.getElementById('edit-name').value;
+        updatedUser.phone = document.getElementById('edit-phone').value;
+        updatedUser.dob = document.getElementById('edit-dob').value;
+        updatedUser.address = document.getElementById('edit-address').value;
+        updatedUser.avatar = preview.src; // Saves Base64 string
+
+        db.saveUser(updatedUser);
+        state.user = updatedUser; // Update local state immediately
+        
+        UI.alert('Profile Updated', 'Your profile details have been saved successfully.', 'success');
+        navigate('profile');
+    };
+}
+
 function pageProfile() {
     const u = state.user;
     const logs = db.getUserLogs(u.id); 
@@ -1195,7 +1091,6 @@ function pageProfile() {
 
     return `
     <div class="space-y-6 pb-20">
-        <!-- Profile Card -->
         <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden group">
             <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-violet-500 to-fuchsia-500 group-hover:scale-105 transition duration-500"></div>
             <div class="relative z-10 -mt-2"><img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white"></div>
@@ -1211,8 +1106,8 @@ function pageProfile() {
                     <i data-lucide="hash" width="14"></i> Student ID: ${u.id}
                  </div>
                  <div class="flex gap-2">
-                    <span class="px-4 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100">${u.role}</span>
-                    ${u.isVerified ? '<span class="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' : '<span class="px-4 py-1.5 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'}
+                    <button data-link="edit-profile" class="px-5 py-2 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100 flex items-center gap-2 hover:bg-indigo-100 transition"><i data-lucide="edit-2" width="14"></i> Edit Profile</button>
+                    ${u.isVerified ? '<span class="px-4 py-2 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' : '<span class="px-4 py-2 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'}
                  </div>
             </div>
         </div>
@@ -1236,70 +1131,24 @@ function pageProfile() {
             </div>
         </div>
         
-        <button onclick="db.clearSession(); renderApp();" class="w-full bg-red-50 text-red-600 font-bold py-4 rounded-xl border border-red-100 hover:bg-red-100 transition flex items-center justify-center gap-2"><i data-lucide="log-out" width="18"></i> Sign Out</button>
+        <button onclick="UI.confirm('Sign Out?', 'Are you sure you want to log out?', () => { db.clearSession(); renderApp(); })" class="w-full bg-red-50 text-red-600 font-bold py-4 rounded-xl border border-red-100 hover:bg-red-100 transition flex items-center justify-center gap-2"><i data-lucide="log-out" width="18"></i> Sign Out</button>
     </div>`;
 }
-window.requestFriend = (id) => { db.addFriend(state.user.id, id); alert('Friend added!'); renderApp(); };
+window.requestFriend = (id) => { db.addFriend(state.user.id, id); UI.alert('Success', 'Friend added!', 'success'); renderApp(); };
 
-function pagePurchases() {
-    // Filter batches that are in user's enrolled list
-    const enrolled = BATCHES.filter(b => state.user.enrolledBatches?.includes(b.id));
-
-    return `
-    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="book-open-check" class="text-indigo-600"></i> My Learning</h2>
-    
-    <div class="grid gap-5">
-        ${enrolled.map(b => `
-            <div data-link="subjects" data-params='{"id":"${b.id}"}' class="bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-                <div class="h-24 ${b.color} relative p-4">
-                    <span class="bg-white/90 text-xs font-bold px-3 py-1 rounded-full absolute bottom-3 left-4 shadow-sm text-gray-800 flex items-center gap-1">
-                        <i data-lucide="play-circle" width="14" class="text-indigo-600"></i> Continue Learning
-                    </span>
-                    <i data-lucide="book" class="text-white/30 absolute top-2 right-4 w-16 h-16"></i>
-                </div>
-                <div class="p-5">
-                    <h3 class="text-lg font-bold text-slate-800 mb-1 group-hover:text-indigo-600 transition">${b.batchName}</h3>
-                    <p class="text-xs text-gray-400 mb-4 line-clamp-1">${b.description}</p>
-                    
-                    <div class="w-full bg-gray-100 rounded-full h-2 mb-2">
-                        <div class="bg-green-500 h-2 rounded-full" style="width: 15%"></div>
-                    </div>
-                    <div class="flex justify-between text-[10px] font-bold text-gray-400">
-                        <span>15% Completed</span>
-                        <span>View Subjects <i data-lucide="chevron-right" width="10" class="inline"></i></span>
-                    </div>
-                </div>
-            </div>
-        `).join('')}
-        
-        ${enrolled.length === 0 ? `
-            <div class="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
-                <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-                    <i data-lucide="lock" width="32"></i>
-                </div>
-                <h3 class="text-lg font-bold text-gray-900">No Batches Purchased</h3>
-                <p class="text-gray-400 text-sm mb-6 max-w-xs mx-auto">You haven't enrolled in any classes yet. Purchase a batch to start learning.</p>
-                <button data-link="classes" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-indigo-500/30 transition">Explore Batches</button>
-            </div>
-        ` : ''}
-    </div>`;
-}
-
-// --- SETTINGS (Enhanced) ---
 function pageSettings() {
     const u = state.user;
     return `
     <h2 class="text-2xl font-bold mb-6">Settings</h2>
     
-    <!-- Profile Edit Section -->
-    <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4 flex items-center gap-4 hover:shadow-md transition">
+    <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer" data-link="edit-profile">
         <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-400 to-cyan-400 p-[2px]">
-            <img src="${u.avatar}" class="w-full h-full rounded-full border-2 border-white">
+            <img src="${u.avatar}" class="w-full h-full rounded-full border-2 border-white object-cover">
         </div>
         <div>
             <h3 class="font-bold text-lg text-slate-800">${u.name}</h3>
             <p class="text-xs text-gray-500 mb-2">${u.email}</p>
-            <button id="edit-profile-btn" class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition">Edit Profile</button>
+            <button class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition">Edit Profile</button>
         </div>
     </div>
 
@@ -1308,34 +1157,19 @@ function pageSettings() {
             <div><h3 class="font-bold text-slate-800">Push Notifications</h3><p class="text-xs text-gray-400">Receive class updates</p></div>
             <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in"><input type="checkbox" name="toggle" id="toggle" checked class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/><label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-indigo-300 cursor-pointer"></label></div>
         </div>
-        
-        <button onclick="alert('Password reset link sent to email.')" class="w-full bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center hover:bg-gray-50">
+        <button onclick="UI.alert('Email Sent', 'Password reset link sent to email.', 'info')" class="w-full bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center hover:bg-gray-50">
             <span class="font-bold text-slate-800">Change Password</span><i data-lucide="chevron-right" class="text-gray-400"></i>
         </button>
-
-        <button onclick="localStorage.clear(); window.location.reload()" class="w-full bg-red-50 p-5 rounded-2xl border border-red-100 flex justify-between items-center hover:bg-red-100">
+        <button onclick="UI.confirm('Reset App?', 'This will clear all local data and log you out.', () => { localStorage.clear(); window.location.reload(); })" class="w-full bg-red-50 p-5 rounded-2xl border border-red-100 flex justify-between items-center hover:bg-red-100">
             <span class="font-bold text-red-600">Clear Cache & Reset App</span><i data-lucide="trash-2" class="text-red-400"></i>
         </button>
-        
-        <div class="text-center text-xs text-gray-300 mt-4 font-mono">v1.5.3 &bull; Build 2024</div>
+        <div class="text-center text-xs text-gray-300 mt-4 font-mono">v1.6.0 &bull; Build 2024</div>
     </div>
     <style>.toggle-checkbox:checked { right: 0; border-color: #68D391; } .toggle-checkbox:checked + .toggle-label { background-color: #68D391; } .toggle-checkbox { right: 0; transition: all 0.3s; }</style>`;
 }
 
 function attachSettingsLogic() {
-    const btn = document.getElementById('edit-profile-btn');
-    if(btn) {
-        btn.onclick = () => {
-            const newName = prompt("Enter new name:", state.user.name);
-            if(newName && newName !== state.user.name) {
-                const u = state.user;
-                u.name = newName;
-                db.saveUser(u);
-                alert("Profile Updated!");
-                renderApp();
-            }
-        };
-    }
+    // Logic handled in-line or via navigation
 }
 
 function pageHelp() {
