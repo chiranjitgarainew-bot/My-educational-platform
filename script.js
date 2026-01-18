@@ -31,20 +31,34 @@ const BATCHES = [
     }
 ];
 
+// UI Helper: Vibrant Gradients for dynamic cards
+const GRADIENTS = [
+    'from-blue-500 to-cyan-400',
+    'from-fuchsia-500 to-pink-500',
+    'from-emerald-500 to-teal-400',
+    'from-orange-500 to-amber-400',
+    'from-violet-600 to-indigo-500',
+    'from-rose-500 to-red-400'
+];
+
+function getGradient(index) {
+    return GRADIENTS[index % GRADIENTS.length];
+}
+
 // ==========================================
 // 2. DATABASE SERVICE (Safe Storage Wrapper)
 // ==========================================
 
 const KEYS = {
     USERS: 'app_users',
-    SESSION: 'app_session',
+    SESSION: 'app_session', // Persistent Session Key
     CONTENT: 'app_content',
     REQUESTS: 'app_requests',
     CHAPTERS: 'app_chapters',
     PROGRESS: 'app_progress',
     MESSAGES: 'app_messages',
     COUPONS: 'app_coupons',
-    ACTIVITY: 'app_activity_logs' // New Key for Tracking Everything
+    ACTIVITY: 'app_activity_logs'
 };
 
 // Safe Storage Handler
@@ -103,19 +117,17 @@ const db = {
         return user;
     },
 
-    // --- Activity Logging System (New Feature) ---
-    // This creates the "Record" of everything the user does
+    // --- Activity Logging ---
     logActivity(userId, type, description) {
         const logs = this._get(KEYS.ACTIVITY, []);
         const newLog = {
             id: Date.now().toString(36) + Math.random().toString(36).substr(2),
             userId: userId,
-            type: type, // e.g., 'LOGIN', 'WATCH', 'PURCHASE'
+            type: type,
             description: description,
             timestamp: Date.now()
         };
-        logs.unshift(newLog); // Add to top
-        // Limit logs to keep storage clean (optional, keeping last 1000 logs total)
+        logs.unshift(newLog);
         if(logs.length > 1000) logs.length = 1000;
         this._save(KEYS.ACTIVITY, logs);
     },
@@ -124,34 +136,44 @@ const db = {
         return this._get(KEYS.ACTIVITY, []).filter(log => log.userId === userId);
     },
 
-    // --- Session ---
+    // --- Session (Auto Login Logic) ---
     initiateSession(email) {
         const users = this.getUsers();
         const user = users[email];
         if(!user) return null;
+        
+        // Update device ID to current
         user.deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         user.lastLogin = Date.now();
+        
         users[email] = user;
         this._save(KEYS.USERS, users);
+        
+        // Save to LocalStorage for persistence (Auto Login)
         this.setSession(user);
         
-        // Log the login event
         this.logActivity(user.id, 'LOGIN', 'User logged in successfully');
-        
         return user;
     },
+    
     validateSession() {
         const session = this.getSession();
         if(!session) return false;
+        
+        // Check if user still exists in DB
         const user = this.getUser(session.email);
+        
+        // Security: Multi-device logout check
         if(!user || user.deviceId !== session.deviceId) { 
-            this.clearSession(); return false; 
+            this.clearSession(); 
+            return false; 
         }
         return true;
     },
+    
     getSession() { return this._get(KEYS.SESSION, null); },
     setSession(u) { this._save(KEYS.SESSION, u); },
-    clearSession() { storage.removeItem(KEYS.SESSION); },
+    clearSession() { storage.removeItem(KEYS.SESSION); }, // Only cleared on explicit logout
 
     verifyEmail(email, code) {
         const users = this.getUsers();
@@ -161,7 +183,6 @@ const db = {
             delete user.verificationCode;
             users[email] = user;
             this._save(KEYS.USERS, users);
-            
             this.logActivity(user.id, 'VERIFY', 'Email verified successfully');
             return { success: true };
         }
@@ -220,20 +241,15 @@ const db = {
         if(req) {
             req.status = 'approved';
             this._save(KEYS.REQUESTS, reqs);
-            
             const users = this.getUsers();
             const user = Object.values(users).find(u => u.id === req.userId);
-            
             if(user) {
                 user.enrolledBatches = user.enrolledBatches || [];
                 if(!user.enrolledBatches.includes(req.batchId)) {
                     user.enrolledBatches.push(req.batchId);
                     users[user.email] = user;
                     this._save(KEYS.USERS, users);
-                    
-                    // Log for User
                     this.logActivity(user.id, 'ENROLL_SUCCESS', `Approved for batch: ${req.batchName}`);
-
                     const session = this.getSession();
                     if(session && session.id === user.id) {
                         session.enrolledBatches = user.enrolledBatches;
@@ -261,17 +277,14 @@ const db = {
         const map = this._get(KEYS.PROGRESS, {});
         const key = `${p.userId}_${p.contentId}`;
         let justCompleted = false;
-        
         if((p.watchedSeconds / p.totalSeconds) > 0.9 && !p.completed) {
             p.completed = true;
             justCompleted = true;
         } else if(map[key]?.completed) {
             p.completed = true;
         }
-        
         map[key] = p;
         this._save(KEYS.PROGRESS, map);
-
         if(justCompleted) {
             this.logActivity(p.userId, 'COMPLETION', `Completed video lesson`);
         }
@@ -338,21 +351,18 @@ document.addEventListener('click', e => {
     }
 });
 
-// Seed data for all classes so purchase flow works
+// Seed data
 async function seedData() {
-    // Seed Class 8
     if(!db.hasChapters('8')) {
         const ch = [];
         for(let i=1; i<=5; i++) ch.push({ id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${i}: Demo Math`, order:i });
         db.seedChapters(ch);
     }
-    // Seed Class 9
     if(!db.hasChapters('9')) {
         const ch = [];
         for(let i=1; i<=5; i++) ch.push({ id:`s9_${i}`, batchId:'9', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${i}: Physics Concept`, order:i });
         db.seedChapters(ch);
     }
-    // Seed Class 10
     if(!db.hasChapters('10')) {
         const ch = [];
         for(let i=1; i<=5; i++) ch.push({ id:`s10_${i}`, batchId:'10', subject:'জীবন বিজ্ঞান (Life Science)', title:`Chapter ${i}: Biology Intro`, order:i });
@@ -367,6 +377,7 @@ async function seedData() {
 function renderApp() {
     const app = document.getElementById('app');
 
+    // Security Check for Multi-device
     if(!state.checkInterval) {
         state.checkInterval = setInterval(() => {
             if(state.user && !db.validateSession()) {
@@ -380,7 +391,9 @@ function renderApp() {
         }, 5000);
     }
 
+    // Auto Login Logic: Check localStorage immediately
     const session = db.getSession();
+    
     if (!session) {
         state.user = null;
         app.innerHTML = renderAuthPage();
@@ -447,24 +460,9 @@ function attachAuthLogic() {
         await new Promise(r => setTimeout(r, 600));
         if (mode === 'signup') {
             if(db.getUser(email)) { els.msg.innerText = 'Account exists.'; els.msg.className = 'text-center text-red-500 font-bold mb-2'; return; }
-            
-            // Generate a Unique Student ID (The Code)
             const studentId = 'STU' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000);
-            
-            db.saveUser({ 
-                id: studentId, // Uses the generated code as the key ID
-                name, 
-                email, 
-                password: pass, 
-                role: 'student', 
-                isVerified: false, 
-                verificationCode: '123456', 
-                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, 
-                enrolledBatches: [], 
-                friends: [] 
-            });
+            db.saveUser({ id: studentId, name, email, password: pass, role: 'student', isVerified: false, verificationCode: '123456', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, enrolledBatches: [], friends: [] });
             db.logActivity(studentId, 'SIGNUP', 'Account created successfully');
-
             mode = 'verify'; tempEmail = email; els.title.innerText = 'Verify Email'; els.btn.innerText = 'Verify Code'; els.name.classList.add('hidden'); els.pass.classList.add('hidden'); els.otp.classList.remove('hidden'); els.msg.innerText = 'Code sent (123456)'; els.msg.className = 'text-center text-green-600 font-bold mb-2';
         } else if (mode === 'verify') {
             const res = db.verifyEmail(tempEmail, otp);
@@ -570,7 +568,7 @@ function attachPageLogic() {
 }
 
 // ==========================================
-// 6. INDIVIDUAL PAGES
+// 6. INDIVIDUAL PAGES (UPDATED UI)
 // ==========================================
 
 function pageHome() {
@@ -628,7 +626,6 @@ function pageBatchDetails() {
     </div>`;
 }
 
-// --- PAYMENT PAGE ---
 function pagePayment() {
     const b = BATCHES.find(x => x.id === state.params.id);
     const discount = state.tempPayment.discountAmount || 0;
@@ -741,10 +738,7 @@ function attachPaymentLogic() {
     };
 }
 
-// --- PURCHASED BATCHES & FLOW ---
-
 function pagePurchases() {
-    // Filter batches that are in user's enrolled list
     const enrolled = BATCHES.filter(b => state.user.enrolledBatches?.includes(b.id));
 
     return `
@@ -787,14 +781,10 @@ function pagePurchases() {
     </div>`;
 }
 
+// --- COLORFUL SUBJECT PAGE ---
 function pageSubjects() {
     const b = BATCHES.find(x => x.id === state.params.id);
-    
-    // Security Check: If not enrolled, redirect to payment
-    if(!state.user.enrolledBatches.includes(b.id)) { 
-        navigate('payment', {id: b.id}); 
-        return ''; 
-    }
+    if(!state.user.enrolledBatches.includes(b.id)) { navigate('payment', {id: b.id}); return ''; }
 
     return `
     <div class="pb-10">
@@ -809,39 +799,40 @@ function pageSubjects() {
              <p class="text-slate-400 text-sm mt-2">Select a subject to view chapters</p>
         </div>
         
-        <!-- Subjects Grid -->
+        <!-- Vibrant Subjects Grid -->
         <div class="space-y-4 px-2 -mt-10 relative z-10">
-            ${b.subjects.map(sub => `
+            ${b.subjects.map((sub, idx) => {
+                const gradient = getGradient(idx);
+                return `
                 <div data-link="chapters" data-params='{"bid":"${b.id}","sub":"${encodeURIComponent(sub)}"}' 
-                     class="bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex items-center justify-between cursor-pointer hover:border-indigo-400 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
+                     class="bg-white p-5 rounded-2xl shadow-md border-l-4 hover:border-l-8 transition-all duration-300 flex items-center justify-between cursor-pointer group"
+                     style="border-color: #6366f1;"> <!-- Fallback if needed, but classes work better -->
+                    
                     <div class="flex items-center gap-4">
-                        <div class="w-14 h-14 bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-600 rounded-2xl flex items-center justify-center font-black text-2xl shadow-inner group-hover:scale-110 transition">
+                        <div class="w-16 h-16 bg-gradient-to-br ${gradient} text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:scale-105 transition-transform duration-300">
                             ${sub[0]}
                         </div>
                         <div>
                             <h3 class="font-bold text-lg text-slate-800 group-hover:text-indigo-600 transition">${sub}</h3>
-                            <p class="text-xs text-gray-400 font-bold mt-0.5">Click to view chapters</p>
+                            <p class="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-wide">Course Material</p>
                         </div>
                     </div>
-                    <div class="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition shadow-sm">
-                        <i data-lucide="chevron-right" width="16"></i>
+                    <div class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition shadow-sm">
+                        <i data-lucide="chevron-right" width="20"></i>
                     </div>
-                </div>
-            `).join('')}
+                </div>`;
+            }).join('')}
         </div>
     </div>`;
 }
 
+// --- COLORFUL CHAPTER PAGE ---
 function pageChapters() {
     const { bid, sub } = state.params; 
     const sName = decodeURIComponent(sub); 
     const chapters = db.getChapters(bid, sName);
 
-    // Auto-seed if empty (fallback)
-    if(chapters.length === 0) { 
-        seedData().then(() => renderApp()); 
-        return '<div class="text-center mt-20"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div><p class="mt-4 text-gray-500">Loading Content...</p></div>'; 
-    }
+    if(chapters.length === 0) { seedData().then(() => renderApp()); return '<div class="text-center mt-20"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div><p class="mt-4 text-gray-500">Loading Content...</p></div>'; }
 
     return `
     <div>
@@ -853,20 +844,23 @@ function pageChapters() {
         <div class="grid gap-4">
             ${chapters.map((ch, idx) => `
                 <div data-link="lectures" data-params='{"cid":"${ch.id}"}' 
-                     class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:border-indigo-300 hover:shadow-md transition relative overflow-hidden group">
+                     class="glass p-5 rounded-2xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition relative overflow-hidden group bg-gradient-to-r from-white to-slate-50">
                     
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500 rounded-l-2xl"></div>
+                    <!-- Decorative Side Bar -->
+                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b ${getGradient(idx)}"></div>
                     
-                    <div class="flex justify-between items-start">
+                    <div class="flex justify-between items-start pl-4">
                         <div>
-                            <div class="text-[10px] font-extrabold text-indigo-500 uppercase tracking-wider mb-1 bg-indigo-50 inline-block px-2 py-0.5 rounded">Chapter ${String(idx+1).padStart(2, '0')}</div>
-                            <h3 class="font-bold text-lg text-gray-900 mt-1">${ch.title}</h3>
+                            <div class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Chapter ${String(idx+1).padStart(2, '0')}
+                            </div>
+                            <h3 class="font-bold text-lg text-gray-900 mt-1 group-hover:text-indigo-600 transition">${ch.title}</h3>
                         </div>
-                        <i data-lucide="play-circle" class="text-gray-300 group-hover:text-indigo-600 transition"></i>
+                        <i data-lucide="play-circle" class="text-gray-300 group-hover:text-indigo-600 transition transform group-hover:scale-110"></i>
                     </div>
                     
-                    <div class="mt-4 pt-3 border-t border-gray-50 flex items-center gap-2 text-xs font-bold text-gray-500">
-                         <span class="flex items-center gap-1"><i data-lucide="video" width="12"></i> Video Lectures</span>
+                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs font-bold text-gray-400 pl-4">
+                         <span class="flex items-center gap-1 bg-white px-2 py-1 rounded shadow-sm"><i data-lucide="video" width="12"></i> Lectures</span>
                     </div>
                 </div>
             `).join('')}
@@ -965,7 +959,7 @@ function attachPlayerLogic() {
     }
 }
 
-// --- ADMIN PANEL (Enhanced with Stats & Users Tab) ---
+// --- ADMIN PANEL (Colorful Requests) ---
 function pageAdmin() {
     if(state.user.role !== 'admin') return '<div class="p-10 text-center text-red-500">Access Denied</div>';
     const reqs = db.getRequests();
@@ -981,59 +975,67 @@ function pageAdmin() {
     <div class="mb-6">
         <h2 class="text-2xl font-bold mb-4">Admin Dashboard</h2>
         
-        <!-- Dashboard Stats -->
         <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                <div class="text-xs text-gray-500 font-bold uppercase mb-1">Total Students</div>
-                <div class="text-2xl font-black text-indigo-600">${totalUsers}</div>
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 rounded-2xl text-white shadow-lg shadow-indigo-200">
+                <div class="text-xs font-bold uppercase opacity-80 mb-1">Total Students</div>
+                <div class="text-3xl font-black">${totalUsers}</div>
             </div>
-            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                <div class="text-xs text-gray-500 font-bold uppercase mb-1">Total Revenue</div>
-                <div class="text-2xl font-black text-green-600">₹${totalRevenue.toLocaleString()}</div>
+            <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200">
+                <div class="text-xs font-bold uppercase opacity-80 mb-1">Total Revenue</div>
+                <div class="text-3xl font-black">₹${totalRevenue.toLocaleString()}</div>
             </div>
         </div>
 
         <div class="flex justify-between items-center mb-4">
             <div class="flex p-1 bg-white border border-gray-200 rounded-xl overflow-x-auto no-scrollbar">
-                <button onclick="navigate('admin', {tab:'requests'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='requests' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}">Requests</button>
-                <button onclick="navigate('admin', {tab:'coupons'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='coupons' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}">Coupons</button>
-                <button onclick="navigate('admin', {tab:'users'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='users' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}">Users</button>
+                <button onclick="navigate('admin', {tab:'requests'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='requests' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Requests</button>
+                <button onclick="navigate('admin', {tab:'coupons'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='coupons' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Coupons</button>
+                <button onclick="navigate('admin', {tab:'users'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='users' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Users</button>
             </div>
             <button data-link="admin-upload" class="bg-indigo-600 text-white p-2 rounded-lg shadow-md hover:bg-indigo-700 ml-2"><i data-lucide="upload" class="w-5 h-5"></i></button>
         </div>
     </div>
 
     ${tab === 'requests' ? `
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="p-4 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center"><span>Pending</span><span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs">${reqs.filter(r=>r.status==='pending').length}</span></div>
-            <div class="divide-y divide-gray-100">
+        <div class="space-y-4">
+            <div class="p-4 bg-orange-50 border border-orange-100 rounded-xl font-bold text-orange-700 flex justify-between items-center shadow-sm">
+                <span>Pending Approvals</span>
+                <span class="bg-orange-500 text-white px-2 py-1 rounded text-xs">${reqs.filter(r=>r.status==='pending').length}</span>
+            </div>
+            
+            <div class="space-y-3">
                 ${reqs.filter(r => r.status === 'pending').map(r => `
-                    <div class="p-4 flex justify-between items-center hover:bg-gray-50 transition">
-                        <div>
-                            <div class="font-bold text-slate-800">${r.userName}</div>
-                            <div class="text-xs text-gray-500">${r.batchName} &bull; <span class="text-green-600 font-bold">₹${r.amount}</span></div>
-                            <div class="text-[10px] text-gray-400 mt-1">${r.method || 'Manual'} &bull; ${new Date(r.timestamp).toLocaleString()}</div>
+                    <div class="p-5 bg-white border-l-4 border-orange-400 rounded-xl shadow-sm flex flex-col gap-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-bold text-slate-800 text-lg">${r.userName}</div>
+                                <div class="text-sm text-gray-500 font-medium">${r.batchName}</div>
+                            </div>
+                            <span class="text-lg font-black text-slate-700">₹${r.amount}</span>
                         </div>
-                        <div class="flex gap-2">
-                            <button onclick="approvePay('${r.id}')" class="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100"><i data-lucide="check"></i></button>
-                            <button onclick="rejectPay('${r.id}')" class="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><i data-lucide="x"></i></button>
+                        
+                        <div class="flex justify-between items-center border-t border-gray-100 pt-3">
+                            <div class="text-xs text-gray-400 font-bold bg-gray-50 px-2 py-1 rounded uppercase">${r.method || 'Manual'}</div>
+                            <div class="flex gap-2">
+                                <button onclick="approvePay('${r.id}')" class="px-4 py-2 bg-green-500 text-white rounded-lg font-bold text-xs hover:bg-green-600 shadow-sm flex items-center gap-1"><i data-lucide="check" width="14"></i> Approve</button>
+                                <button onclick="rejectPay('${r.id}')" class="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs hover:bg-red-200">Reject</button>
+                            </div>
                         </div>
                     </div>`).join('')}
-                ${reqs.filter(r => r.status === 'pending').length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm">No pending requests found.</div>' : ''}
+                ${reqs.filter(r => r.status === 'pending').length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">No pending requests found.</div>' : ''}
             </div>
         </div>
     ` : tab === 'users' ? `
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="p-4 bg-gray-50 border-b border-gray-200 font-bold text-gray-700">All Students</div>
             <div class="divide-y divide-gray-100">
                 ${users.map(u => `
-                    <div class="p-4 flex items-center gap-3 hover:bg-gray-50">
-                        <img src="${u.avatar}" class="w-10 h-10 rounded-full bg-gray-200">
+                    <div class="p-4 flex items-center gap-3 hover:bg-gray-50 transition">
+                        <img src="${u.avatar}" class="w-10 h-10 rounded-full bg-gray-200 border border-gray-300">
                         <div class="flex-1">
-                            <div class="font-bold text-slate-800 text-sm">${u.name} ${u.role==='admin'?'(Admin)':''}</div>
+                            <div class="font-bold text-slate-800 text-sm">${u.name} ${u.role==='admin'?'<span class="text-indigo-600">(Admin)</span>':''}</div>
                             <div class="text-xs text-gray-500">${u.email}</div>
                         </div>
-                        <div class="text-xs font-bold ${u.isVerified ? 'text-green-600' : 'text-yellow-600'}">${u.isVerified ? 'Verified' : 'Pending'}</div>
+                        <div class="text-xs font-bold px-2 py-1 rounded ${u.isVerified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${u.isVerified ? 'Verified' : 'Pending'}</div>
                     </div>
                 `).join('')}
             </div>
@@ -1049,17 +1051,20 @@ function pageAdmin() {
                 </form>
             </div>
             
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div class="p-4 bg-gray-50 border-b border-gray-200 font-bold text-gray-700">Active Coupons</div>
-                <div class="divide-y divide-gray-100">
-                    ${coupons.map(c => `
-                        <div class="p-4 flex justify-between items-center">
-                            <div><div class="font-black text-slate-800">${c.code}</div><div class="text-xs text-green-600 font-bold">Flat ₹${c.amount} OFF</div></div>
-                            <button onclick="deleteCoupon('${c.code}')" class="text-red-500 p-2 hover:bg-red-50 rounded-lg"><i data-lucide="trash-2" width="16"></i></button>
+            <div class="space-y-3">
+                ${coupons.map(c => `
+                    <div class="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-green-100 p-2 rounded-lg text-green-600"><i data-lucide="tag" width="20"></i></div>
+                            <div>
+                                <div class="font-black text-slate-800 tracking-wider">${c.code}</div>
+                                <div class="text-xs text-green-600 font-bold">Flat ₹${c.amount} OFF</div>
+                            </div>
                         </div>
-                    `).join('')}
-                    ${coupons.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No active coupons.</div>' : ''}
-                </div>
+                        <button onclick="deleteCoupon('${c.code}')" class="text-gray-400 p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition"><i data-lucide="trash-2" width="16"></i></button>
+                    </div>
+                `).join('')}
+                ${coupons.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No active coupons.</div>' : ''}
             </div>
         </div>
     `}`;
@@ -1113,26 +1118,16 @@ function attachChatLogic() {
     if(form) { const box = document.getElementById('chat-box'); box.scrollTop = box.scrollHeight; form.onsubmit = e => { e.preventDefault(); const input = document.getElementById('chat-in'); const txt = input.value.trim(); if(!txt) return; db.sendMessage({ id: Date.now().toString(), senderId: state.user.id, receiverId: state.params.fid, text: txt, timestamp: Date.now(), isRead: false }); renderApp(); }; }
 }
 
+// --- PROFILE PAGE (Colorful) ---
 function pageProfile() {
     const u = state.user;
-    const logs = db.getUserLogs(u.id); // Retrieve activity logs for this user ID
-    
-    // Helper to format log type
-    const getLogIcon = (type) => {
-        switch(type) {
-            case 'LOGIN': return 'log-in';
-            case 'SIGNUP': return 'user-plus';
-            case 'PURCHASE_REQUEST': return 'credit-card';
-            case 'ENROLL_SUCCESS': return 'check-circle';
-            case 'COMPLETION': return 'award';
-            default: return 'activity';
-        }
-    };
+    const logs = db.getUserLogs(u.id); 
+    const getLogIcon = (type) => { switch(type) { case 'LOGIN': return 'log-in'; case 'SIGNUP': return 'user-plus'; case 'PURCHASE_REQUEST': return 'credit-card'; case 'ENROLL_SUCCESS': return 'check-circle'; case 'COMPLETION': return 'award'; default: return 'activity'; } };
 
     return `
     <div class="space-y-6 pb-20">
-        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center relative overflow-hidden group">
+            <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-violet-500 to-fuchsia-500 group-hover:scale-105 transition duration-500"></div>
             <div class="relative z-10 -mt-2"><img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white"></div>
             <h2 class="text-2xl font-black mt-3 text-slate-800">${u.name}</h2><p class="text-slate-500 text-sm font-medium">${u.email}</p>
             
@@ -1222,12 +1217,14 @@ function pageSettings() {
     <h2 class="text-2xl font-bold mb-6">Settings</h2>
     
     <!-- Profile Edit Section -->
-    <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4 flex items-center gap-4">
-        <img src="${u.avatar}" class="w-16 h-16 rounded-full border border-gray-100">
+    <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-4 flex items-center gap-4 hover:shadow-md transition">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-400 to-cyan-400 p-[2px]">
+            <img src="${u.avatar}" class="w-full h-full rounded-full border-2 border-white">
+        </div>
         <div>
-            <h3 class="font-bold text-lg">${u.name}</h3>
+            <h3 class="font-bold text-lg text-slate-800">${u.name}</h3>
             <p class="text-xs text-gray-500 mb-2">${u.email}</p>
-            <button id="edit-profile-btn" class="text-indigo-600 text-xs font-bold hover:underline">Edit Profile</button>
+            <button id="edit-profile-btn" class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition">Edit Profile</button>
         </div>
     </div>
 
