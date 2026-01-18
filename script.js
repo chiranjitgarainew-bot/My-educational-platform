@@ -34,8 +34,8 @@ const BATCHES = [
 // ==========================================
 // 2. HARDCODED USERS (PERMANENT DATA)
 // ==========================================
-// এই ইউজারগুলো কোড রান করার সাথে সাথেই ডাটাবেসে যোগ হয়ে যাবে।
-// আপনি নতুন ইউজার পার্মানেন্ট করতে চাইলে এখানে কপি করে বসাতে পারেন।
+// এখানে আপনি ইউজারের সমস্ত তথ্য (Email, Purchased Batches, Info) সেট করতে পারেন।
+// অ্যাপ লোড হওয়ার সাথে সাথে এই তথ্যগুলো আপডেট হয়ে যাবে।
 
 const PRELOADED_USERS = [
     {
@@ -45,19 +45,23 @@ const PRELOADED_USERS = [
         password: 'admin',
         role: 'admin',
         isVerified: true,
+        phone: '+91 90000 00000',
+        address: 'Admin HQ, EdTech City',
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
-        enrolledBatches: [],
+        enrolledBatches: [], // Admins typically access all, but list here if needed
         friends: []
     },
     {
         id: 'STU01',
-        name: 'Demo Student',
-        email: 'student@study.com',
+        name: 'Rahul Sharma',
+        email: 'rahul.sharma@gmail.com', // Specific Gmail
         password: '123',
         role: 'student',
         isVerified: true,
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Student',
-        enrolledBatches: ['8', '9'], // ডিফল্টভাবে ক্লাস ৮ ও ৯ এ এনরোল করা
+        phone: '+91 98765 43210', // Personal Info
+        address: '12/A, College Street, Kolkata, West Bengal', // Personal Info
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul',
+        enrolledBatches: ['8', '9'], // Purchases Loaded Here (Class 8 & 9)
         friends: []
     }
 ];
@@ -148,17 +152,36 @@ const db = {
         return user;
     },
 
-    // Inject Preloaded Users
+    // Inject Preloaded Users (Forces update from code)
     seedUsers() {
         const users = this.getUsers();
         let changed = false;
         PRELOADED_USERS.forEach(u => {
-            if (!users[u.email]) {
+            // Check if user exists (by email key)
+            if (users[u.email]) {
+                // Update existing user with data from code (merging)
+                // This ensures if you change enrolledBatches in code, it reflects in app
+                const merged = { ...users[u.email], ...u };
+                // We check if anything actually changed to avoid unnecessary writes
+                if (JSON.stringify(users[u.email]) !== JSON.stringify(merged)) {
+                    users[u.email] = merged;
+                    changed = true;
+                }
+            } else {
+                // Create new user if not exists
                 users[u.email] = u;
                 changed = true;
             }
         });
-        if (changed) this._save(KEYS.USERS, users);
+        if (changed) {
+            this._save(KEYS.USERS, users);
+            // Also update current session if it matches a preloaded user
+            const session = this.getSession();
+            if (session) {
+                const updatedUser = users[session.email];
+                if (updatedUser) this.setSession(updatedUser);
+            }
+        }
     },
 
     // --- Activity Logging ---
@@ -390,7 +413,7 @@ document.addEventListener('click', e => {
 
 // Seed data
 async function seedData() {
-    // 1. Seed Hardcoded Users
+    // 1. Seed Hardcoded Users (Updates existing ones too)
     db.seedUsers();
 
     // 2. Seed Chapters if not exist
@@ -467,7 +490,7 @@ function renderAuthPage() {
                 <p class="text-slate-500 text-sm mt-2 font-medium">Secure Login &bull; One Device Policy</p>
                 <div class="mt-4 p-3 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
                     <strong>Demo Login:</strong><br>
-                    Student: student@study.com / 123<br>
+                    Student: rahul.sharma@gmail.com / 123<br>
                     Admin: admin@study.com / admin
                 </div>
             </div>
@@ -1164,7 +1187,7 @@ function attachChatLogic() {
     if(form) { const box = document.getElementById('chat-box'); box.scrollTop = box.scrollHeight; form.onsubmit = e => { e.preventDefault(); const input = document.getElementById('chat-in'); const txt = input.value.trim(); if(!txt) return; db.sendMessage({ id: Date.now().toString(), senderId: state.user.id, receiverId: state.params.fid, text: txt, timestamp: Date.now(), isRead: false }); renderApp(); }; }
 }
 
-// --- PROFILE PAGE (Colorful) ---
+// --- PROFILE PAGE (Colorful & Detailed) ---
 function pageProfile() {
     const u = state.user;
     const logs = db.getUserLogs(u.id); 
@@ -1172,13 +1195,19 @@ function pageProfile() {
 
     return `
     <div class="space-y-6 pb-20">
-        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center relative overflow-hidden group">
+        <!-- Profile Card -->
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden group">
             <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-violet-500 to-fuchsia-500 group-hover:scale-105 transition duration-500"></div>
             <div class="relative z-10 -mt-2"><img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white"></div>
-            <h2 class="text-2xl font-black mt-3 text-slate-800">${u.name}</h2><p class="text-slate-500 text-sm font-medium">${u.email}</p>
+            <div class="text-center mt-3">
+                <h2 class="text-2xl font-black text-slate-800">${u.name}</h2>
+                <div class="text-slate-500 text-sm font-medium flex items-center justify-center gap-1 mt-1"><i data-lucide="mail" width="14"></i> ${u.email}</div>
+                ${u.phone ? `<div class="text-slate-400 text-xs font-bold flex items-center justify-center gap-1 mt-1"><i data-lucide="phone" width="12"></i> ${u.phone}</div>` : ''}
+                ${u.address ? `<div class="text-slate-400 text-xs font-bold flex items-center justify-center gap-1 mt-1 max-w-xs mx-auto"><i data-lucide="map-pin" width="12"></i> ${u.address}</div>` : ''}
+            </div>
             
-            <div class="mt-4 flex flex-col items-center gap-2">
-                 <div class="bg-slate-100 px-4 py-2 rounded-xl text-slate-600 font-mono text-xs font-bold tracking-wider flex items-center gap-2 border border-slate-200">
+            <div class="mt-5 flex flex-col items-center gap-3">
+                 <div class="bg-slate-50 px-4 py-2 rounded-xl text-slate-500 font-mono text-xs font-bold tracking-wider flex items-center gap-2 border border-slate-200">
                     <i data-lucide="hash" width="14"></i> Student ID: ${u.id}
                  </div>
                  <div class="flex gap-2">
