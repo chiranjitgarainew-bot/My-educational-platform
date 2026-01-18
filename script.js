@@ -43,7 +43,8 @@ const KEYS = {
     CHAPTERS: 'app_chapters',
     PROGRESS: 'app_progress',
     MESSAGES: 'app_messages',
-    COUPONS: 'app_coupons'
+    COUPONS: 'app_coupons',
+    ACTIVITY: 'app_activity_logs' // New Key for Tracking Everything
 };
 
 // Safe Storage Handler
@@ -102,6 +103,27 @@ const db = {
         return user;
     },
 
+    // --- Activity Logging System (New Feature) ---
+    // This creates the "Record" of everything the user does
+    logActivity(userId, type, description) {
+        const logs = this._get(KEYS.ACTIVITY, []);
+        const newLog = {
+            id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+            userId: userId,
+            type: type, // e.g., 'LOGIN', 'WATCH', 'PURCHASE'
+            description: description,
+            timestamp: Date.now()
+        };
+        logs.unshift(newLog); // Add to top
+        // Limit logs to keep storage clean (optional, keeping last 1000 logs total)
+        if(logs.length > 1000) logs.length = 1000;
+        this._save(KEYS.ACTIVITY, logs);
+    },
+
+    getUserLogs(userId) {
+        return this._get(KEYS.ACTIVITY, []).filter(log => log.userId === userId);
+    },
+
     // --- Session ---
     initiateSession(email) {
         const users = this.getUsers();
@@ -112,6 +134,10 @@ const db = {
         users[email] = user;
         this._save(KEYS.USERS, users);
         this.setSession(user);
+        
+        // Log the login event
+        this.logActivity(user.id, 'LOGIN', 'User logged in successfully');
+        
         return user;
     },
     validateSession() {
@@ -135,6 +161,8 @@ const db = {
             delete user.verificationCode;
             users[email] = user;
             this._save(KEYS.USERS, users);
+            
+            this.logActivity(user.id, 'VERIFY', 'Email verified successfully');
             return { success: true };
         }
         return { success: false, msg: 'Invalid Verification Code' };
@@ -184,6 +212,7 @@ const db = {
         const all = this.getRequests(); 
         all.unshift(req); 
         this._save(KEYS.REQUESTS, all); 
+        this.logActivity(req.userId, 'PURCHASE_REQUEST', `Requested enrollment for ${req.batchName}`);
     },
     approveRequest(id) {
         const reqs = this.getRequests();
@@ -202,13 +231,13 @@ const db = {
                     users[user.email] = user;
                     this._save(KEYS.USERS, users);
                     
-                    // Update active session if the admin is approving their own test account
-                    // or if the user is currently logged in (handled via reload usually, but let's sync)
+                    // Log for User
+                    this.logActivity(user.id, 'ENROLL_SUCCESS', `Approved for batch: ${req.batchName}`);
+
                     const session = this.getSession();
                     if(session && session.id === user.id) {
                         session.enrolledBatches = user.enrolledBatches;
                         this.setSession(session);
-                        // Update global state immediately
                         if(state.user && state.user.id === user.id) {
                             state.user.enrolledBatches = user.enrolledBatches;
                         }
@@ -223,6 +252,7 @@ const db = {
         if(req) {
             req.status = 'rejected';
             this._save(KEYS.REQUESTS, reqs);
+            this.logActivity(req.userId, 'ENROLL_REJECT', `Request rejected for batch: ${req.batchName}`);
         }
     },
 
@@ -230,10 +260,21 @@ const db = {
     saveProgress(p) {
         const map = this._get(KEYS.PROGRESS, {});
         const key = `${p.userId}_${p.contentId}`;
-        if((p.watchedSeconds / p.totalSeconds) > 0.9) p.completed = true;
-        else if(map[key]?.completed) p.completed = true;
+        let justCompleted = false;
+        
+        if((p.watchedSeconds / p.totalSeconds) > 0.9 && !p.completed) {
+            p.completed = true;
+            justCompleted = true;
+        } else if(map[key]?.completed) {
+            p.completed = true;
+        }
+        
         map[key] = p;
         this._save(KEYS.PROGRESS, map);
+
+        if(justCompleted) {
+            this.logActivity(p.userId, 'COMPLETION', `Completed video lesson`);
+        }
     },
     getUserProgress(uid) { return Object.values(this._get(KEYS.PROGRESS, {})).filter(p => p.userId === uid); },
     getMessages(u1, u2) {
@@ -253,7 +294,10 @@ const db = {
         if(user && friend) {
             user.friends = user.friends || [];
             friend.friends = friend.friends || [];
-            if(!user.friends.includes(friendId)) user.friends.push(friendId);
+            if(!user.friends.includes(friendId)) {
+                user.friends.push(friendId);
+                this.logActivity(userId, 'FRIEND', `Added friend: ${friend.name}`);
+            }
             if(!friend.friends.includes(userId)) friend.friends.push(userId);
             users[user.email] = user;
             users[friend.email] = friend;
@@ -403,7 +447,24 @@ function attachAuthLogic() {
         await new Promise(r => setTimeout(r, 600));
         if (mode === 'signup') {
             if(db.getUser(email)) { els.msg.innerText = 'Account exists.'; els.msg.className = 'text-center text-red-500 font-bold mb-2'; return; }
-            db.saveUser({ id: Date.now().toString(), name, email, password: pass, role: 'student', isVerified: false, verificationCode: '123456', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, enrolledBatches: [], friends: [] });
+            
+            // Generate a Unique Student ID (The Code)
+            const studentId = 'STU' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000);
+            
+            db.saveUser({ 
+                id: studentId, // Uses the generated code as the key ID
+                name, 
+                email, 
+                password: pass, 
+                role: 'student', 
+                isVerified: false, 
+                verificationCode: '123456', 
+                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, 
+                enrolledBatches: [], 
+                friends: [] 
+            });
+            db.logActivity(studentId, 'SIGNUP', 'Account created successfully');
+
             mode = 'verify'; tempEmail = email; els.title.innerText = 'Verify Email'; els.btn.innerText = 'Verify Code'; els.name.classList.add('hidden'); els.pass.classList.add('hidden'); els.otp.classList.remove('hidden'); els.msg.innerText = 'Code sent (123456)'; els.msg.className = 'text-center text-green-600 font-bold mb-2';
         } else if (mode === 'verify') {
             const res = db.verifyEmail(tempEmail, otp);
@@ -435,7 +496,7 @@ function renderLayout(content) {
                 <div class="flex flex-col items-center mt-4">
                     <img src="${u.avatar}" class="w-16 h-16 rounded-full border-4 border-white/20 mb-3 shadow-lg">
                     <h3 class="font-bold text-lg">${u.name}</h3>
-                    <span class="px-2 py-0.5 bg-white/20 rounded text-[10px] uppercase font-bold tracking-wider">${u.role}</span>
+                    <div class="mt-1 px-3 py-1 bg-white/20 rounded-full text-[10px] font-mono tracking-wider">ID: ${u.id}</div>
                 </div>
             </div>
             <nav class="p-4 space-y-1">
@@ -1054,21 +1115,57 @@ function attachChatLogic() {
 
 function pageProfile() {
     const u = state.user;
-    const otherUsers = Object.values(db.getUsers()).filter(x => x.id !== u.id);
-    const myRequests = db.getRequests().filter(r => r.userId === u.id);
+    const logs = db.getUserLogs(u.id); // Retrieve activity logs for this user ID
+    
+    // Helper to format log type
+    const getLogIcon = (type) => {
+        switch(type) {
+            case 'LOGIN': return 'log-in';
+            case 'SIGNUP': return 'user-plus';
+            case 'PURCHASE_REQUEST': return 'credit-card';
+            case 'ENROLL_SUCCESS': return 'check-circle';
+            case 'COMPLETION': return 'award';
+            default: return 'activity';
+        }
+    };
+
     return `
     <div class="space-y-6 pb-20">
         <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center relative overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
             <div class="relative z-10 -mt-2"><img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white"></div>
             <h2 class="text-2xl font-black mt-3 text-slate-800">${u.name}</h2><p class="text-slate-500 text-sm font-medium">${u.email}</p>
-            <div class="mt-4 flex justify-center gap-2">
-                <span class="px-4 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100">${u.role}</span>
-                ${u.isVerified ? '<span class="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' : '<span class="px-4 py-1.5 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'}
+            
+            <div class="mt-4 flex flex-col items-center gap-2">
+                 <div class="bg-slate-100 px-4 py-2 rounded-xl text-slate-600 font-mono text-xs font-bold tracking-wider flex items-center gap-2 border border-slate-200">
+                    <i data-lucide="hash" width="14"></i> Student ID: ${u.id}
+                 </div>
+                 <div class="flex gap-2">
+                    <span class="px-4 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100">${u.role}</span>
+                    ${u.isVerified ? '<span class="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' : '<span class="px-4 py-1.5 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'}
+                 </div>
             </div>
         </div>
-        <div><h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="history" class="text-indigo-600"></i> Enrollment History</h3><div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">${myRequests.length > 0 ? `<div class="divide-y divide-gray-50">${myRequests.map(r => `<div class="p-4 flex justify-between items-center"><div><div class="font-bold text-slate-700 text-sm">${r.batchName}</div><div class="text-[10px] text-gray-400 font-medium">${new Date(r.timestamp).toLocaleDateString()}</div></div><div>${r.status === 'approved' ? '<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">Approved</span>' : r.status === 'rejected' ? '<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold">Rejected</span>' : '<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-[10px] font-bold">Pending</span>'}</div></div>`).join('')}</div>` : `<div class="p-8 text-center"><div class="bg-gray-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"><i data-lucide="file-text" class="text-gray-300"></i></div><p class="text-gray-400 text-xs font-bold">No payment requests yet.</p></div>`}</div></div>
-        <div><h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="users" class="text-indigo-600"></i> Community</h3><div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">${otherUsers.length > 0 ? otherUsers.map(user => `<div class="p-4 flex justify-between items-center hover:bg-gray-50 transition"><div class="flex items-center gap-3"><img src="${user.avatar}" class="w-10 h-10 rounded-full border border-gray-100"><div><div class="font-bold text-sm text-slate-700">${user.name}</div><div class="text-[10px] text-gray-400">Student</div></div></div>${u.friends?.includes(user.id) ? '<span class="text-[10px] font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full">Connected</span>' : `<button onclick="requestFriend('${user.id}')" class="text-indigo-600 bg-indigo-50 p-2 rounded-full hover:bg-indigo-100 hover:scale-110 transition"><i data-lucide="user-plus" width="16"></i></button>`}</div>`).join('') : '<div class="p-6 text-center text-gray-400 text-sm">No other users found.</div>'}</div></div>
+
+        <div>
+            <h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="activity" class="text-indigo-600"></i> Recent Activity</h3>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden max-h-80 overflow-y-auto">
+                ${logs.length > 0 ? `<div class="divide-y divide-gray-50">
+                    ${logs.map(log => `
+                        <div class="p-4 flex gap-3 hover:bg-gray-50 transition">
+                            <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mt-1 flex-shrink-0">
+                                <i data-lucide="${getLogIcon(log.type)}" width="16"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-700 text-sm">${log.description}</div>
+                                <div class="text-[10px] text-gray-400 font-medium">${new Date(log.timestamp).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>` : `<div class="p-8 text-center text-gray-400 text-xs font-bold">No activity recorded yet.</div>`}
+            </div>
+        </div>
+        
         <button onclick="db.clearSession(); renderApp();" class="w-full bg-red-50 text-red-600 font-bold py-4 rounded-xl border border-red-100 hover:bg-red-100 transition flex items-center justify-center gap-2"><i data-lucide="log-out" width="18"></i> Sign Out</button>
     </div>`;
 }
