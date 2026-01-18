@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, RoutePath } from '../types';
 import Sidebar from './Sidebar';
-import { Menu, Bell, Home, ShoppingBag, Users, User as UserIcon } from 'lucide-react';
+import { Menu, Bell, Home, ShoppingBag, Users, User as UserIcon, MessageSquare } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -19,8 +19,8 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children }) => {
 
   const footerItems = [
     { icon: Home, label: 'Home', path: RoutePath.HOME },
-    { icon: ShoppingBag, label: 'Purchases', path: RoutePath.PURCHASES },
-    { icon: Users, label: 'Community', path: RoutePath.COMMUNITY },
+    { icon: ShoppingBag, label: 'Your Batch', path: RoutePath.PURCHASES },
+    { icon: MessageSquare, label: 'Messenger', path: RoutePath.INBOX },
     { icon: UserIcon, label: 'Profile', path: RoutePath.PROFILE },
   ];
 

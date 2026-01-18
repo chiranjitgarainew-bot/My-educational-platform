@@ -14,33 +14,63 @@ import Help from './pages/Help';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import AdminDashboard from './pages/AdminDashboard';
+import Inbox from './pages/Inbox';
+import Chat from './pages/Chat';
+import Community from './pages/Community';
+import Purchases from './pages/Purchases';
 import { User, RoutePath } from './types';
 import { userDb } from './services/db';
-
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
-    <div className="bg-blue-50 p-6 rounded-full mb-4">
-      <span className="text-4xl">🚧</span>
-    </div>
-    <h2 className="text-xl font-bold text-gray-800 mb-2">{title}</h2>
-    <p className="text-gray-500">This feature is coming soon to Your study platform.</p>
-  </div>
-);
+import { seedClass8Data, seedClass9Data, seedClass10Data } from './services/seeder';
+import { AlertTriangle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionError, setSessionError] = useState(false);
 
   useEffect(() => {
-    const sessionUser = userDb.getSession();
-    if (sessionUser) {
-      setUser(sessionUser);
-    }
-    setLoading(false);
-  }, []);
+    const initApp = async () => {
+      // 1. Check Session & Device ID
+      const sessionUser = userDb.getSession();
+      
+      if (sessionUser) {
+          // Immediately validate session on load
+          const isValid = await userDb.validateSession();
+          if (isValid) {
+              setUser(sessionUser);
+          } else {
+              userDb.clearSession();
+              setSessionError(true);
+          }
+      }
+      
+      // 2. Seed Data
+      await seedClass8Data();
+      await seedClass9Data();
+      await seedClass10Data();
+      
+      setLoading(false);
+    };
+
+    initApp();
+
+    // 3. Periodic Session Check (Single Device Enforcement)
+    const interval = setInterval(async () => {
+        if (user) {
+            const isValid = await userDb.validateSession();
+            if (!isValid) {
+                handleLogout();
+                setSessionError(true);
+            }
+        }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   const handleLogin = (newUser: User) => {
     setUser(newUser);
+    setSessionError(false);
   };
 
   const handleLogout = () => {
@@ -59,6 +89,28 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
+      {/* Session Expired Modal */}
+      {sessionError && !user && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertTriangle size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Session Expired</h2>
+                  <p className="text-gray-500 text-sm mb-6">
+                      You have been logged out because your account was accessed from another device. 
+                      For security, only one active session is allowed.
+                  </p>
+                  <button 
+                    onClick={() => setSessionError(false)} 
+                    className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold"
+                  >
+                      Dismiss & Log In
+                  </button>
+              </div>
+          </div>
+      )}
+
       {!user ? (
         <Auth onLogin={handleLogin} />
       ) : (
@@ -75,16 +127,20 @@ const App: React.FC = () => {
             <Route path={RoutePath.CHAPTER_LECTURES} element={<ChapterLectures />} />
             <Route path={RoutePath.VIDEO_PLAYER} element={<VideoPlayer />} />
 
+            {/* Social Routes */}
+            <Route path={RoutePath.INBOX} element={<Inbox />} />
+            <Route path={RoutePath.CHAT} element={<Chat />} />
+            <Route path={RoutePath.COMMUNITY} element={<Community />} />
+
             <Route path={RoutePath.HELP} element={<Help />} />
             <Route path={RoutePath.PROFILE} element={<Profile user={user} onUpdateUser={handleUpdateUser} />} />
             <Route path={RoutePath.SETTINGS} element={<Settings />} />
             
-            {/* Admin Routes */}
+            {/* Admin Routes with Role Check */}
             <Route path={RoutePath.ADMIN} element={user.role === 'admin' ? <AdminDashboard /> : <Navigate to={RoutePath.HOME} />} />
             <Route path={RoutePath.ADMIN_UPLOAD} element={<Navigate to={RoutePath.ADMIN} />} />
             
-            <Route path={RoutePath.PURCHASES} element={<PlaceholderPage title="Your Purchases" />} />
-            <Route path={RoutePath.COMMUNITY} element={<PlaceholderPage title="Community Hub" />} />
+            <Route path={RoutePath.PURCHASES} element={<Purchases />} />
             
             <Route path="*" element={<Navigate to={RoutePath.HOME} replace />} />
           </Routes>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Youtube, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, Youtube, CheckCircle, AlertCircle, Link as LinkIcon } from 'lucide-react';
 import { userDb } from '../services/db';
 import { ClassContent } from '../types';
 
@@ -19,14 +19,15 @@ const AdminUpload: React.FC = () => {
     setLoading(true);
     setSuccess('');
 
-    // Basic Youtube URL validation/formatting
-    // Converts "watch?v=" to "embed/" for iframe support
     let finalUrl = formData.videoUrl;
+    
+    // Convert YouTube links if applicable
     if (finalUrl.includes('watch?v=')) {
       finalUrl = finalUrl.replace('watch?v=', 'embed/');
     } else if (finalUrl.includes('youtu.be/')) {
       finalUrl = finalUrl.replace('youtu.be/', 'youtube.com/embed/');
     }
+    // MP4/M3U8 links are used as is
 
     const newContent: ClassContent = {
       id: Date.now().toString(),
@@ -52,7 +53,7 @@ const AdminUpload: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <Upload className="text-primary" /> Upload New Class
           </h1>
-          <p className="text-gray-500 text-sm">Add educational videos for students.</p>
+          <p className="text-gray-500 text-sm">Add educational videos (YouTube, MP4, or HLS/m3u8).</p>
         </div>
 
         <div className="p-6">
@@ -104,16 +105,16 @@ const AdminUpload: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">YouTube Video Link</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Video Link (YouTube/MP4/M3U8)</label>
                 <div className="relative">
-                  <Youtube className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                  <LinkIcon className="absolute left-3 top-2.5 text-gray-400" size={18} />
                   <input
                     type="url"
                     required
                     value={formData.videoUrl}
                     onChange={e => setFormData({...formData, videoUrl: e.target.value})}
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                    placeholder="https://youtube.com/watch?v=..."
+                    placeholder="https://example.com/video.mp4 or YouTube"
                   />
                 </div>
               </div>

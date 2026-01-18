@@ -10,10 +10,10 @@ export const BATCHES: ClassBatch[] = [
     price: 1999,
     originalPrice: 3998,
     discount: 50,
-    subjects: ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Bengali'],
+    subjects: ['গণিত (Mathematics)', 'জীবন বিজ্ঞান (Life Science)', 'ভৌত বিজ্ঞান (Physical Science)'],
     instructors: [
       'ভৌতবিজ্ঞান: Bidesh Chayan Sahoo',
-      'রসায়ন: Nantu Kumar Das (NKD Sir)',
+      'জীবন বিজ্ঞান: Nantu Kumar Das',
       'গণিত: Amit Sir'
     ],
     features: ['Daily Live Classes', 'PDF Notes', 'Weekly Mock Tests', 'Doubt Clearing Sessions'],
@@ -28,9 +28,10 @@ export const BATCHES: ClassBatch[] = [
     price: 2499,
     originalPrice: 4999,
     discount: 50,
-    subjects: ['Physics', 'Chemistry', 'Mathematics', 'Life Science'],
+    subjects: ['গণিত (Mathematics)', 'জীবন বিজ্ঞান (Life Science)', 'ভৌত বিজ্ঞান (Physical Science)'],
     instructors: [
       'ভৌতবিজ্ঞান: Bidesh Sir',
+      'জীবন বিজ্ঞান: Nantu Sir',
       'গণিত: Rahul Sir'
     ],
     features: ['Chapter-wise Tests', 'Recorded Backup', 'Mentorship'],
@@ -45,7 +46,7 @@ export const BATCHES: ClassBatch[] = [
     price: 2999,
     originalPrice: 5999,
     discount: 50,
-    subjects: ['All Subjects'],
+    subjects: ['গণিত (Mathematics)', 'জীবন বিজ্ঞান (Life Science)', 'ভৌত বিজ্ঞান (Physical Science)'],
     instructors: ['Team BongMistry'],
     features: ['Test Series', 'Last Minute Suggestions', 'Full Syllabus Coverage'],
     language: 'Bengali'
@@ -78,7 +79,7 @@ export const BATCHES: ClassBatch[] = [
     features: ['Mock Tests', 'Previous Year Q&A'],
     language: 'Bengali'
   },
-];
+  ];
 
 export const getBatchById = (id: string | undefined) => {
   return BATCHES.find(b => b.id === id);
