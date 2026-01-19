@@ -5,7 +5,77 @@
  */
 
 // ==========================================
-// 1. APP STATE & ROUTING
+// 1. CUSTOM UI SYSTEM (Alerts & Confirms)
+// ==========================================
+
+const UI = {
+    // Advanced Alert Modal
+    alert(title, message, type = 'success') {
+        const themes = {
+            success: { bg: 'bg-emerald-50', text: 'text-emerald-800', iconBg: 'bg-emerald-100', icon: 'check-circle-2', border: 'border-emerald-200', btn: 'bg-emerald-600 hover:bg-emerald-700' },
+            error:   { bg: 'bg-rose-50',    text: 'text-rose-800',    iconBg: 'bg-rose-100',    icon: 'x-circle',       border: 'border-rose-200',    btn: 'bg-rose-600 hover:bg-rose-700' },
+            info:    { bg: 'bg-blue-50',    text: 'text-blue-800',    iconBg: 'bg-blue-100',    icon: 'info',           border: 'border-blue-200',    btn: 'bg-blue-600 hover:bg-blue-700' },
+            warning: { bg: 'bg-amber-50',   text: 'text-amber-800',   iconBg: 'bg-amber-100',   icon: 'alert-triangle', border: 'border-amber-200',   btn: 'bg-amber-600 hover:bg-amber-700' }
+        };
+        const t = themes[type] || themes.info;
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in';
+        modal.innerHTML = `
+            <div class="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up relative overflow-hidden border ${t.border}">
+                <div class="absolute -top-10 -right-10 w-32 h-32 ${t.iconBg} rounded-full blur-3xl opacity-50"></div>
+                <div class="relative z-10 flex flex-col items-center">
+                    <div class="w-20 h-20 mb-4 rounded-full ${t.iconBg} ${t.text} flex items-center justify-center shadow-inner border-4 border-white">
+                        <i data-lucide="${t.icon}" width="40"></i>
+                    </div>
+                    <h3 class="text-2xl font-black ${t.text} mb-2 text-center tracking-tight">${title}</h3>
+                    <p class="text-center text-slate-500 font-medium text-sm mb-6 leading-relaxed">${message}</p>
+                    <button id="ui-alert-btn" class="w-full py-4 rounded-xl font-bold text-white ${t.btn} transition shadow-lg transform active:scale-95 flex items-center justify-center gap-2">
+                        <span>Continue</span> <i data-lucide="arrow-right" width="18"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        lucide.createIcons();
+        document.getElementById('ui-alert-btn').onclick = () => {
+            modal.classList.add('opacity-0', 'scale-90');
+            setTimeout(() => modal.remove(), 200);
+        };
+    },
+
+    // Advanced Confirm Modal
+    confirm(title, message, onConfirm, type = 'danger') {
+        const isDanger = type === 'danger';
+        const btnClass = isDanger ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200';
+        
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in';
+        modal.innerHTML = `
+            <div class="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up border border-slate-100">
+                 <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center shadow-sm border border-slate-100">
+                    <i data-lucide="help-circle" width="32"></i>
+                </div>
+                <h3 class="text-xl font-black text-center text-slate-800 mb-2">${title}</h3>
+                <p class="text-center text-slate-500 text-sm mb-8 font-medium">${message}</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="ui-cancel-btn" class="py-3.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
+                    <button id="ui-confirm-btn" class="py-3.5 rounded-xl font-bold text-white ${btnClass} transition shadow-lg">Confirm</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        lucide.createIcons();
+        document.getElementById('ui-cancel-btn').onclick = () => modal.remove();
+        document.getElementById('ui-confirm-btn').onclick = () => {
+            modal.remove();
+            onConfirm();
+        };
+    }
+};
+
+// ==========================================
+// 2. APP STATE & ROUTING
 // ==========================================
 
 const state = {
@@ -33,13 +103,12 @@ document.addEventListener('click', e => {
 });
 
 // ==========================================
-// 2. DATA SEEDING (Specific Class 8)
+// 3. DATA SEEDING (Specific Class 8)
 // ==========================================
 
 async function seedData() {
     db.seedUsers();
 
-    // Check if Class 8 specific chapters exist. If not, seed them.
     if(!db.hasChapters('8')) {
         const mathChapters = [
             "INTRODUCTION CLASS", "পূর্বপাঠের পুনরালোচনা", "পাই চিত্র", "মূলদ সংখ্যার ধারণা", 
@@ -71,8 +140,6 @@ async function seedData() {
         db.seedChapters(ch);
     }
 
-    // Keep existing seed logic for other classes if needed, or clear it if you want only Class 8 strictly. 
-    // For safety, let's just ensure 9 and 10 have some demo data if empty.
     if(!db.hasChapters('9')) {
         const ch = []; for(let i=1; i<=5; i++) ch.push({ id:`s9_${i}`, batchId:'9', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${i}: Physics Concept`, order:i }); db.seedChapters(ch);
     }
@@ -82,7 +149,7 @@ async function seedData() {
 }
 
 // ==========================================
-// 3. MAIN RENDERER & OFFLINE LOGIC
+// 4. MAIN RENDERER & OFFLINE LOGIC
 // ==========================================
 
 function renderOfflinePage() {
@@ -140,7 +207,7 @@ function renderApp() {
 }
 
 // ==========================================
-// 4. VIEW COMPONENTS
+// 5. VIEW COMPONENTS
 // ==========================================
 
 function renderAuthPage() {
@@ -432,13 +499,12 @@ function attachPaymentLogic() {
     window.removeCoupon = () => { state.tempPayment = { couponApplied: null, discountAmount: 0 }; renderApp(); };
 
     document.getElementById('phonepe-btn').onclick = async () => {
-        const modal = document.getElementById('pay-modal');
-        modal.classList.remove('hidden');
-        await new Promise(r => setTimeout(r, 2500));
+        // Prepare Data
         const b = BATCHES.find(x => x.id === state.params.id);
         const discount = state.tempPayment.discountAmount || 0;
         const finalPrice = Math.max(0, b.price - discount);
 
+        // 1. Create DB Request (Pending)
         db.createRequest({
             id: Date.now().toString(),
             userId: state.user.id,
@@ -451,8 +517,27 @@ function attachPaymentLogic() {
             status: 'pending',
             method: 'PhonePe Gateway'
         });
-        modal.classList.add('hidden');
-        UI.alert('Request Sent Successfully', 'Your enrollment request has been sent to the admin. You will be notified once approved.', 'success');
+
+        // 2. Try to Open UPI Intent (Mobile Deep Link)
+        // Construct standard UPI intent link
+        // pa=VPA, pn=PayeeName, am=Amount, cu=Currency
+        const upiLink = `upi://pay?pa=9732140742@ybl&pn=StudyPlatform&am=${finalPrice}&cu=INR`;
+
+        // Check if potentially on mobile to behave appropriately
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            window.location.href = upiLink;
+        } else {
+             // Fallback for Desktop: Show QR or loading simulation
+             const modal = document.getElementById('pay-modal');
+             modal.classList.remove('hidden');
+             await new Promise(r => setTimeout(r, 2000));
+             modal.classList.add('hidden');
+        }
+
+        // 3. Notify User
+        UI.alert('Request Submitted', 'If the payment app opened, please complete the transaction. We have received your enrollment request.', 'success');
         navigate('profile');
     };
 
