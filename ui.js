@@ -81,15 +81,23 @@ function renderAuthPage() {
         <div class="glass w-full max-w-md rounded-3xl p-8 relative z-10 shadow-2xl border border-white/40 animate-fade-in">
             <div class="text-center mb-8">
                 <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg transform -rotate-3 hover:rotate-0 transition">
-                    <i data-lucide="book-open" width="32"></i>
+                    <i data-lucide="shield-check" width="32"></i>
                 </div>
                 <h2 class="text-3xl font-extrabold text-slate-800 tracking-tight" id="auth-title">Welcome Back</h2>
                 <p class="text-slate-500 text-sm mt-2 font-medium">Secure Login &bull; One Device Policy</p>
+                <div class="mt-4 p-3 bg-blue-50 text-blue-800 text-xs rounded border border-blue-100">
+                    <strong>Demo Credentials:</strong><br>
+                    student@study.com / 123<br>
+                    admin@study.com / admin
+                </div>
             </div>
             <form id="auth-form" class="space-y-4">
                 <div id="name-field" class="hidden animate-slide-up"><input type="text" id="name" placeholder="Full Name" class="w-full p-4 bg-white/50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 transition"></div>
                 <div><input type="email" id="email" placeholder="Email Address" required class="w-full p-4 bg-white/50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 transition"></div>
-                <div id="pass-field"><input type="password" id="password" placeholder="Password" required class="w-full p-4 bg-white/50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 transition"></div>
+                <div id="pass-field">
+                    <input type="password" id="password" placeholder="Password" required class="w-full p-4 bg-white/50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 transition">
+                    <p id="pass-hint" class="text-[10px] text-gray-400 mt-1 hidden">Min 8 chars, 1 uppercase, 1 number.</p>
+                </div>
                 <div id="otp-field" class="hidden animate-slide-up text-center">
                     <input type="text" id="otp" placeholder="######" maxlength="6" class="w-full p-4 text-center tracking-[1em] font-extrabold border rounded-xl text-xl">
                     <p class="text-xs text-gray-400 mt-2">Enter verification code sent to email</p>
@@ -105,41 +113,140 @@ function renderAuthPage() {
 function attachAuthLogic() {
     const form = document.getElementById('auth-form');
     const toggle = document.getElementById('toggle-auth');
-    const els = { name: document.getElementById('name-field'), pass: document.getElementById('pass-field'), otp: document.getElementById('otp-field'), title: document.getElementById('auth-title'), btn: document.getElementById('btn-text'), msg: document.getElementById('msg') };
-    let mode = 'login'; let tempEmail = '';
+    const els = { 
+        name: document.getElementById('name-field'), 
+        pass: document.getElementById('pass-field'), 
+        otp: document.getElementById('otp-field'), 
+        title: document.getElementById('auth-title'), 
+        btn: document.getElementById('btn-text'), 
+        msg: document.getElementById('msg'),
+        passHint: document.getElementById('pass-hint')
+    };
+    
+    let mode = 'login'; 
+    let tempEmail = '';
     
     toggle.onclick = () => {
         if(mode === 'login') { 
-            mode = 'signup'; els.title.innerText = 'Join Us'; els.btn.innerText = 'Sign Up'; els.name.classList.remove('hidden'); toggle.innerText = 'Back to Login'; els.msg.innerText = ''; 
+            mode = 'signup'; 
+            els.title.innerText = 'Join Us'; 
+            els.btn.innerText = 'Sign Up'; 
+            els.name.classList.remove('hidden'); 
+            els.passHint.classList.remove('hidden'); // Show Password Requirements
+            toggle.innerText = 'Back to Login'; 
+            els.msg.innerText = ''; 
         } else { 
-            mode = 'login'; els.title.innerText = 'Welcome Back'; els.btn.innerText = 'Log In'; els.name.classList.add('hidden'); els.otp.classList.add('hidden'); els.pass.classList.remove('hidden'); toggle.innerText = 'Create Account'; els.msg.innerText = ''; 
+            mode = 'login'; 
+            els.title.innerText = 'Welcome Back'; 
+            els.btn.innerText = 'Log In'; 
+            els.name.classList.add('hidden'); 
+            els.passHint.classList.add('hidden'); 
+            els.otp.classList.add('hidden'); 
+            els.pass.classList.remove('hidden'); 
+            toggle.innerText = 'Create Account'; 
+            els.msg.innerText = ''; 
         }
     };
     
     form.onsubmit = async (e) => {
         e.preventDefault();
-        const email = document.getElementById('email').value;
+        const email = document.getElementById('email').value.trim();
         const pass = document.getElementById('password')?.value;
-        const name = document.getElementById('name')?.value;
-        const otp = document.getElementById('otp')?.value;
+        const name = document.getElementById('name')?.value.trim();
+        const otp = document.getElementById('otp')?.value.trim();
         
-        els.msg.innerText = 'Processing...'; els.msg.className = 'text-center text-blue-600 font-bold mb-2';
+        els.msg.innerText = 'Processing...'; 
+        els.msg.className = 'text-center text-blue-600 font-bold mb-2';
+        
+        // Short delay for UX
         await new Promise(r => setTimeout(r, 600));
 
         if (mode === 'signup') {
-            if(db.getUser(email)) { els.msg.innerText = 'Account exists.'; els.msg.className = 'text-center text-red-500 font-bold mb-2'; return; }
+            if(db.getUser(email)) { 
+                els.msg.innerText = 'Account exists.'; 
+                els.msg.className = 'text-center text-red-500 font-bold mb-2'; 
+                return; 
+            }
+
+            // 1. Client Side Validation using Security util
+            const check = Security.validateStrength(pass);
+            if (!check.valid) {
+                els.msg.innerText = check.msg;
+                els.msg.className = 'text-center text-red-500 font-bold mb-2';
+                return;
+            }
+
+            // 2. Hash Password (Async)
+            const salt = Security.generateSalt();
+            const hash = await Security.hashPassword(pass, salt);
+
+            // 3. Create User Object with Hashed Password
             const studentId = 'STU' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000);
-            db.saveUser({ id: studentId, name, email, password: pass, role: 'student', isVerified: false, verificationCode: '123456', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, enrolledBatches: [], friends: [] });
-            mode = 'verify'; tempEmail = email; els.title.innerText = 'Verify Email'; els.btn.innerText = 'Verify Code'; els.name.classList.add('hidden'); els.pass.classList.add('hidden'); els.otp.classList.remove('hidden'); els.msg.innerText = 'Code sent (123456)'; els.msg.className = 'text-center text-green-600 font-bold mb-2';
+            
+            db.saveUser({ 
+                id: studentId, 
+                name, 
+                email, 
+                passwordHash: hash, // Store Hash
+                salt: salt,         // Store Salt
+                role: 'student', 
+                isVerified: false, 
+                verificationCode: '123456', 
+                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g,'')}`, 
+                enrolledBatches: [], 
+                friends: [] 
+            });
+
+            mode = 'verify'; 
+            tempEmail = email; 
+            els.title.innerText = 'Verify Email'; 
+            els.btn.innerText = 'Verify Code'; 
+            els.name.classList.add('hidden'); 
+            els.pass.classList.add('hidden'); 
+            els.passHint.classList.add('hidden');
+            els.otp.classList.remove('hidden'); 
+            els.msg.innerText = 'Code sent (123456)'; 
+            els.msg.className = 'text-center text-green-600 font-bold mb-2';
+
         } else if (mode === 'verify') {
             const res = db.verifyEmail(tempEmail, otp);
-            if(res.success) { db.initiateSession(tempEmail); renderApp(); } 
-            else { els.msg.innerText = res.msg; els.msg.className = 'text-center text-red-500 font-bold mb-2'; }
+            if(res.success) { 
+                db.initiateSession(tempEmail); 
+                renderApp(); 
+            } else { 
+                els.msg.innerText = res.msg; 
+                els.msg.className = 'text-center text-red-500 font-bold mb-2'; 
+            }
+
         } else {
-            const u = db.getUser(email);
-            if(!u || u.password !== pass) { els.msg.innerText = 'Invalid credentials.'; els.msg.className = 'text-center text-red-500 font-bold mb-2'; return; }
-            if(!u.isVerified) { mode = 'verify'; tempEmail = email; u.verificationCode = '123456'; db.saveUser(u); els.title.innerText = 'Verify Email'; els.btn.innerText = 'Verify'; els.pass.classList.add('hidden'); els.otp.classList.remove('hidden'); els.msg.innerText = 'Code sent.'; return; }
-            db.initiateSession(email); renderApp();
+            // LOGIN MODE: Delegate to DB Service
+            const result = await db.authenticate(email, pass);
+            
+            if (!result.success) {
+                els.msg.innerText = result.msg;
+                els.msg.className = 'text-center text-red-500 font-bold mb-2';
+                return;
+            }
+
+            const user = result.user;
+            
+            // Check Verification
+            if(!user.isVerified) { 
+                mode = 'verify'; 
+                tempEmail = email; 
+                user.verificationCode = '123456'; 
+                db.saveUser(user); 
+                els.title.innerText = 'Verify Email'; 
+                els.btn.innerText = 'Verify'; 
+                els.pass.classList.add('hidden'); 
+                els.passHint.classList.add('hidden');
+                els.otp.classList.remove('hidden'); 
+                els.msg.innerText = 'Code sent.'; 
+                return; 
+            }
+            
+            db.initiateSession(email); 
+            renderApp();
         }
     };
 }

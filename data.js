@@ -1,6 +1,6 @@
 /**
  * DATA & DATABASE SERVICE
- * Includes: Constants, Gradients, and DB Logic
+ * Includes: Constants, Gradients, DB Logic, and SECURITY Utilities
  */
 
 // ==========================================
@@ -31,12 +31,14 @@ const BATCHES = [
     }
 ];
 
+// Initial users with plain text for seeding only. 
+// These will be converted to hashes immediately upon app load.
 const PRELOADED_USERS = [
     {
         id: 'ADMIN01',
         name: 'Super Admin',
         email: 'admin@study.com',
-        password: 'admin',
+        tempPassword: 'admin', // Will be hashed and removed
         role: 'admin',
         isVerified: true,
         phone: '+91 90000 00000',
@@ -51,7 +53,7 @@ const PRELOADED_USERS = [
         id: 'STU01',
         name: 'Rahul Sharma',
         email: 'student@study.com', 
-        password: '123',
+        tempPassword: '123', // Will be hashed and removed
         role: 'student',
         isVerified: true,
         phone: '+91 98765 43210', 
@@ -78,7 +80,37 @@ function getGradient(index) {
 }
 
 // ==========================================
-// 2. DATABASE SERVICE
+// 2. SECURITY UTILITIES (Hashing & Validation)
+// ==========================================
+
+const Security = {
+    // Generate a random unique salt (Hex string)
+    generateSalt() {
+        const array = new Uint8Array(16);
+        window.crypto.getRandomValues(array);
+        return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    // Hash password + salt using SHA-256 (Async)
+    async hashPassword(password, salt) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password + salt);
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    // Validate Password Strength
+    validateStrength(password) {
+        if (password.length < 8) return { valid: false, msg: "Password must be at least 8 characters." };
+        if (!/[A-Z]/.test(password)) return { valid: false, msg: "Must contain at least 1 uppercase letter." };
+        if (!/[0-9]/.test(password)) return { valid: false, msg: "Must contain at least 1 number." };
+        return { valid: true };
+    }
+};
+
+// ==========================================
+// 3. DATABASE SERVICE
 // ==========================================
 
 const KEYS = {
@@ -114,6 +146,7 @@ const db = {
     getUser(email) { return this.getUsers()[email]; },
     getUserById(id) { return Object.values(this.getUsers()).find(u => u.id === id); },
     
+    // Save User (Expects user object to already have hashed password if coming from signup)
     saveUser(user) {
         const users = this.getUsers();
         users[user.email] = user;
@@ -123,16 +156,50 @@ const db = {
         return user;
     },
 
-    seedUsers() {
+    // Updated Seed Logic to Hash Preloaded Passwords
+    async seedUsers() {
         const users = this.getUsers();
         let changed = false;
-        PRELOADED_USERS.forEach(u => {
-            if (users[u.email]) {
-                if(!users[u.email].role) { users[u.email].role = u.role; changed=true; }
-            } else { users[u.email] = u; changed = true; }
-        });
+        
+        for (const u of PRELOADED_USERS) {
+            if (!users[u.email]) {
+                // New seed user - hash their temp password
+                const salt = Security.generateSalt();
+                const hash = await Security.hashPassword(u.tempPassword, salt);
+                
+                const secureUser = { ...u, salt: salt, passwordHash: hash };
+                delete secureUser.tempPassword; // Remove plain text
+                
+                users[u.email] = secureUser;
+                changed = true;
+            }
+        }
+        
         if (changed) {
             this._save(KEYS.USERS, users);
+            console.log("Database seeded and passwords secured.");
+        }
+    },
+
+    // Secure Login Verification
+    async authenticate(email, passwordInput) {
+        const user = this.getUser(email);
+        if (!user) return { success: false, msg: 'Account not found.' };
+
+        // Handle verify logic
+        if (!user.passwordHash || !user.salt) {
+             // Fallback for very old unmigrated data (shouldn't happen with new seed)
+             if (user.password === passwordInput) return { success: true, user };
+             return { success: false, msg: 'Security update required. Reset password.' };
+        }
+
+        // Hash input with stored salt
+        const inputHash = await Security.hashPassword(passwordInput, user.salt);
+        
+        if (inputHash === user.passwordHash) {
+            return { success: true, user };
+        } else {
+            return { success: false, msg: 'Incorrect password.' };
         }
     },
 
@@ -188,7 +255,6 @@ const db = {
     getChapters(batchId, subject) { return this._get(KEYS.CHAPTERS, []).filter(c => c.batchId === batchId && c.subject === subject).sort((a,b) => a.order - b.order); },
     seedChapters(list) { const all = this._get(KEYS.CHAPTERS, []); this._save(KEYS.CHAPTERS, [...all, ...list]); },
     hasChapters(batchId) { return this._get(KEYS.CHAPTERS, []).some(c => c.batchId === batchId); },
-    // Utility to check if content exists for a chapter to drive the "Coming Soon" logic
     hasContentForChapter(chapterId) {
         return this.getContent().some(c => c.chapterId === chapterId);
     },
