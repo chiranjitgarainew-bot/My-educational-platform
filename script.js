@@ -1049,4 +1049,201 @@ function pageEditProfile() {
                         <i data-lucide="edit-2" width="14"></i>
                     </div>
                 </div>
-                <input type="file" id="avatar-input
+                <input type="file" id="avatar-input" class="hidden" accept="image/*">
+                <p class="text-xs text-gray-400 font-medium mt-2">Tap image to update</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Full Name</label>
+                    <div class="relative">
+                        <i data-lucide="user" class="absolute left-4 top-3.5 text-gray-400 w-5 h-5"></i>
+                        <input type="text" id="edit-name" value="${u.name}" class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Phone Number</label>
+                    <div class="relative">
+                        <i data-lucide="phone" class="absolute left-4 top-3.5 text-gray-400 w-5 h-5"></i>
+                        <input type="tel" id="edit-phone" value="${u.phone || ''}" placeholder="+91 00000 00000" class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition">
+                    </div>
+                </div>
+
+                 <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Address</label>
+                    <div class="relative">
+                        <i data-lucide="map-pin" class="absolute left-4 top-3.5 text-gray-400 w-5 h-5"></i>
+                        <input type="text" id="edit-address" value="${u.address || ''}" placeholder="City, State" class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                     <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Date of Birth</label>
+                        <input type="date" id="edit-dob" value="${u.dob || ''}" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition">
+                    </div>
+                     <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Gender</label>
+                        <select id="edit-gender" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition">
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Bio</label>
+                    <textarea id="edit-bio" rows="3" placeholder="Tell us about yourself..." class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition resize-none">${u.bio || ''}</textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-500/30 hover:scale-[1.02] transition flex items-center justify-center gap-2">
+                <i data-lucide="save" width="18"></i> Save Changes
+            </button>
+        </form>
+    </div>`;
+}
+
+function attachEditProfileLogic() {
+    const u = state.user;
+    
+    // Avatar Click Trigger
+    document.getElementById('avatar-container').onclick = () => document.getElementById('avatar-input').click();
+    
+    // Avatar Preview
+    document.getElementById('avatar-input').onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => document.getElementById('avatar-preview').src = e.target.result;
+            reader.readAsDataURL(file);
+            UI.alert('Image Selected', 'Click "Save Changes" to update your profile picture.', 'info');
+        }
+    };
+
+    document.getElementById('edit-profile-form').onsubmit = (e) => {
+        e.preventDefault();
+        
+        // Collect Data
+        const updatedUser = {
+            ...u,
+            name: document.getElementById('edit-name').value,
+            phone: document.getElementById('edit-phone').value,
+            address: document.getElementById('edit-address').value,
+            dob: document.getElementById('edit-dob').value,
+            bio: document.getElementById('edit-bio').value,
+            avatar: document.getElementById('avatar-preview').src // In real app, upload this
+        };
+
+        // Save
+        db.saveUser(updatedUser);
+        
+        // Update State
+        state.user = updatedUser;
+        
+        // Feedback
+        UI.alert('Profile Updated', 'Your changes have been saved successfully!', 'success');
+        
+        // Redirect
+        setTimeout(() => navigate('profile'), 1500);
+    };
+}
+
+// --- PROFILE PAGE (Colorful) ---
+function pageProfile() {
+    const u = state.user;
+    const logs = db.getUserLogs(u.id); 
+    const getLogIcon = (type) => { switch(type) { case 'LOGIN': return 'log-in'; case 'SIGNUP': return 'user-plus'; case 'PURCHASE_REQUEST': return 'credit-card'; case 'ENROLL_SUCCESS': return 'check-circle'; case 'COMPLETION': return 'award'; default: return 'activity'; } };
+
+    return `
+    <div class="space-y-6 pb-20">
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center relative overflow-hidden group">
+            <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-violet-500 to-fuchsia-500 group-hover:scale-105 transition duration-500"></div>
+            <div class="relative z-10 -mt-2"><img src="${u.avatar}" class="w-28 h-28 rounded-full mx-auto border-[6px] border-white shadow-lg object-cover bg-white"></div>
+            <h2 class="text-2xl font-black mt-3 text-slate-800">${u.name}</h2><p class="text-slate-500 text-sm font-medium">${u.email}</p>
+            
+            <div class="mt-4 flex flex-col items-center gap-2">
+                 <div class="bg-slate-100 px-4 py-2 rounded-xl text-slate-600 font-mono text-xs font-bold tracking-wider flex items-center gap-2 border border-slate-200">
+                    <i data-lucide="hash" width="14"></i> Student ID: ${u.id}
+                 </div>
+                 <div class="flex gap-2">
+                    <span class="px-4 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-indigo-100">${u.role}</span>
+                    ${u.isVerified ? '<span class="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-green-100 flex items-center gap-1"><i data-lucide="shield-check" width="14"></i> Verified</span>' : '<span class="px-4 py-1.5 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border border-yellow-100 flex items-center gap-1"><i data-lucide="shield-alert" width="14"></i> Unverified</span>'}
+                 </div>
+            </div>
+            ${u.bio ? `<p class="mt-4 text-sm text-gray-500 italic max-w-xs mx-auto">"${u.bio}"</p>` : ''}
+        </div>
+
+        <div>
+            <h3 class="font-bold text-lg mb-3 px-2 flex items-center gap-2"><i data-lucide="activity" class="text-indigo-600"></i> Recent Activity</h3>
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden max-h-80 overflow-y-auto">
+                ${logs.length > 0 ? `<div class="divide-y divide-gray-50">
+                    ${logs.map(log => `
+                        <div class="p-4 flex gap-3 hover:bg-gray-50 transition">
+                            <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mt-1 flex-shrink-0">
+                                <i data-lucide="${getLogIcon(log.type)}" width="16"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-700 text-sm">${log.description}</div>
+                                <div class="text-[10px] text-gray-400 font-medium">${new Date(log.timestamp).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>` : `<div class="p-8 text-center text-gray-400 text-xs font-bold">No activity recorded yet.</div>`}
+            </div>
+        </div>
+        
+        <button onclick="db.clearSession(); renderApp();" class="w-full bg-red-50 text-red-600 font-bold py-4 rounded-xl border border-red-100 hover:bg-red-100 transition flex items-center justify-center gap-2"><i data-lucide="log-out" width="18"></i> Sign Out</button>
+    </div>`;
+}
+window.requestFriend = (id) => { db.addFriend(state.user.id, id); UI.alert('Success', 'Friend added!', 'success'); renderApp(); };
+
+// --- SETTINGS (Enhanced) ---
+function pageSettings() {
+    const u = state.user;
+    return `
+    <h2 class="text-2xl font-bold mb-6">Settings</h2>
+    
+    <!-- Profile Edit Section -->
+    <div data-link="edit-profile" class="bg-white rounded-2xl border border-gray-100 p-5 mb-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer group">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-400 to-cyan-400 p-[2px]">
+            <img src="${u.avatar}" class="w-full h-full rounded-full border-2 border-white object-cover">
+        </div>
+        <div class="flex-1">
+            <h3 class="font-bold text-lg text-slate-800">${u.name}</h3>
+            <p class="text-xs text-gray-500 mb-2">${u.email}</p>
+            <span class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold group-hover:bg-indigo-600 group-hover:text-white transition">Edit Profile</span>
+        </div>
+        <i data-lucide="chevron-right" class="text-gray-300 group-hover:text-indigo-600"></i>
+    </div>
+
+    <div class="space-y-4">
+        <div class="bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center">
+            <div><h3 class="font-bold text-slate-800">Push Notifications</h3><p class="text-xs text-gray-400">Receive class updates</p></div>
+            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in"><input type="checkbox" name="toggle" id="toggle" checked class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/><label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-indigo-300 cursor-pointer"></label></div>
+        </div>
+        
+        <button onclick="UI.alert('Email Sent', 'Password reset link sent to ' + state.user.email, 'success')" class="w-full bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center hover:bg-gray-50">
+            <span class="font-bold text-slate-800">Change Password</span><i data-lucide="chevron-right" class="text-gray-400"></i>
+        </button>
+
+        <button onclick="localStorage.clear(); window.location.reload()" class="w-full bg-red-50 p-5 rounded-2xl border border-red-100 flex justify-between items-center hover:bg-red-100">
+            <span class="font-bold text-red-600">Clear Cache & Reset App</span><i data-lucide="trash-2" class="text-red-400"></i>
+        </button>
+        
+        <div class="text-center text-xs text-gray-300 mt-4 font-mono">v1.5.3 &bull; Build 2024</div>
+    </div>
+    <style>.toggle-checkbox:checked { right: 0; border-color: #68D391; } .toggle-checkbox:checked + .toggle-label { background-color: #68D391; } .toggle-checkbox { right: 0; transition: all 0.3s; }</style>`;
+}
+
+function attachSettingsLogic() {
+    // Logic handled via route links
+}
+
+function pageHelp() {
+    return `<h2 class="text-2xl font-bold mb-6">Help Center</h2><div class="space-y-4"><div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg mb-6"><h3 class="font-bold text-lg mb-2">Need Support?</h3><p class="text-sm opacity-90 mb-4">Our team is available 24/7.</p><a href="mailto:support@studyapp.com" class="inline-block bg-white text-indigo-700 px-4 py-2 rounded-lg font-bold text-sm">Contact Support</a></div><h3 class="font-bold text-gray-500 uppercase text-xs tracking-wider px-2">FAQ</h3><div class="bg-white rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-50"><details class="group p-4"><summary class="flex justify-between items-center font-bold cursor-pointer list-none"><span>How to enroll?</span><span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span></summary><p class="text-gray-500 text-sm mt-3 leading-relaxed">Select batch -> Enroll -> Pay via PhonePe or UPI -> Wait for approval.</p></details><details class="group p-4"><summary class="flex justify-between items-center font-bold cursor-pointer list-none"><span>Payment Pending?</span><span class="transition group-open:rotate-180"><i data-lucide="chevron-down"></i></span></summary><p class="text-gray-500 text-sm mt-3 leading-relaxed">Manual payments take 1-2 hours. PhonePe payments are faster.</p></details></div></div>`;
+}
+
+document.addEventListener('DOMContentLoaded', () => { seedData(); renderApp(); });
