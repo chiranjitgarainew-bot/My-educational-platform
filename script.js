@@ -1,329 +1,11 @@
 /**
- * FULL APPLICATION LOGIC
- * Includes: Database Service, Authentication, Router, and UI Rendering
+ * UI LOGIC & ROUTING
+ * Handles rendering, events, and view states.
+ * Depends on data.js for DB operations.
  */
 
 // ==========================================
-// 1. DATA CONSTANTS (Batches & Config)
-// ==========================================
-
-const BATCHES = [
-    { 
-      id: '8', name: 'Class 8', batchName: 'দিশা ব্যাচ (Class-08)', 
-      description: 'Foundation building & basics for Class 8 students.', 
-      color: 'bg-green-500', price: 1999, originalPrice: 3998, discount: 50,
-      subjects: ['গণিত (Mathematics)', 'জীবন বিজ্ঞান (Life Science)', 'ভৌত বিজ্ঞান (Physical Science)'],
-      language: 'Bengali'
-    },
-    { 
-      id: '9', name: 'Class 9', batchName: 'লক্ষ্য ব্যাচ (Class-09)', 
-      description: 'Advanced concepts introduction for Class 9.', 
-      color: 'bg-purple-500', price: 2499, originalPrice: 4999, discount: 50,
-      subjects: ['গণিত (Mathematics)', 'জীবন বিজ্ঞান (Life Science)', 'ভৌত বিজ্ঞান (Physical Science)'],
-      language: 'Bengali'
-    },
-    { 
-      id: '10', name: 'Class 10', batchName: 'উড়ান ব্যাচ (Class-10)', 
-      description: 'Complete Board exam preparation.', 
-      color: 'bg-indigo-500', price: 2999, originalPrice: 5999, discount: 50,
-      subjects: ['গণিত (Mathematics)', 'জীবন বিজ্ঞান (Life Science)', 'ভৌত বিজ্ঞান (Physical Science)'],
-      language: 'Bengali'
-    }
-];
-
-// ==========================================
-// 2. HARDCODED USERS & UTILS
-// ==========================================
-
-const PRELOADED_USERS = [
-    {
-        id: 'ADMIN01',
-        name: 'Super Admin',
-        email: 'admin@study.com',
-        password: 'admin',
-        role: 'admin',
-        isVerified: true,
-        phone: '+91 90000 00000',
-        address: 'Admin HQ, EdTech City',
-        dob: '1990-01-01',
-        bio: 'Managing the platform content and users.',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
-        enrolledBatches: [], 
-        friends: []
-    },
-    {
-        id: 'STU01',
-        name: 'Rahul Sharma',
-        email: 'student@study.com', 
-        password: '123',
-        role: 'student',
-        isVerified: true,
-        phone: '+91 98765 43210', 
-        address: '12/A, College Street, Kolkata', 
-        dob: '2008-05-15',
-        bio: 'Class 9 Student aspiring to be an engineer.',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul',
-        enrolledBatches: ['8', '9'], 
-        friends: []
-    }
-];
-
-const GRADIENTS = [
-    'from-blue-500 to-cyan-400',
-    'from-fuchsia-500 to-pink-500',
-    'from-emerald-500 to-teal-400',
-    'from-orange-500 to-amber-400',
-    'from-violet-600 to-indigo-500',
-    'from-rose-500 to-red-400'
-];
-
-function getGradient(index) {
-    return GRADIENTS[index % GRADIENTS.length];
-}
-
-// ==========================================
-// 3. CUSTOM UI SYSTEM (ADVANCED ALERTS)
-// ==========================================
-
-const UI = {
-    // Advanced Alert Modal
-    alert(title, message, type = 'success') {
-        // Theme Configuration based on type
-        const themes = {
-            success: { bg: 'bg-emerald-50', text: 'text-emerald-800', iconBg: 'bg-emerald-100', icon: 'check-circle-2', border: 'border-emerald-200', btn: 'bg-emerald-600 hover:bg-emerald-700' },
-            error:   { bg: 'bg-rose-50',    text: 'text-rose-800',    iconBg: 'bg-rose-100',    icon: 'x-circle',       border: 'border-rose-200',    btn: 'bg-rose-600 hover:bg-rose-700' },
-            info:    { bg: 'bg-blue-50',    text: 'text-blue-800',    iconBg: 'bg-blue-100',    icon: 'info',           border: 'border-blue-200',    btn: 'bg-blue-600 hover:bg-blue-700' },
-            warning: { bg: 'bg-amber-50',   text: 'text-amber-800',   iconBg: 'bg-amber-100',   icon: 'alert-triangle', border: 'border-amber-200',   btn: 'bg-amber-600 hover:bg-amber-700' }
-        };
-        const t = themes[type] || themes.info;
-
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in';
-        modal.innerHTML = `
-            <div class="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up relative overflow-hidden border ${t.border}">
-                <!-- Decorative Background Blob -->
-                <div class="absolute -top-10 -right-10 w-32 h-32 ${t.iconBg} rounded-full blur-3xl opacity-50"></div>
-                
-                <div class="relative z-10 flex flex-col items-center">
-                    <div class="w-20 h-20 mb-4 rounded-full ${t.iconBg} ${t.text} flex items-center justify-center shadow-inner border-4 border-white">
-                        <i data-lucide="${t.icon}" width="40"></i>
-                    </div>
-                    
-                    <h3 class="text-2xl font-black ${t.text} mb-2 text-center tracking-tight">${title}</h3>
-                    <p class="text-center text-slate-500 font-medium text-sm mb-6 leading-relaxed">${message}</p>
-                    
-                    <button id="ui-alert-btn" class="w-full py-4 rounded-xl font-bold text-white ${t.btn} transition shadow-lg transform active:scale-95 flex items-center justify-center gap-2">
-                        <span>Continue</span> <i data-lucide="arrow-right" width="18"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        lucide.createIcons();
-        document.getElementById('ui-alert-btn').onclick = () => {
-            modal.classList.add('opacity-0', 'scale-90'); // Exit animation
-            setTimeout(() => modal.remove(), 200);
-        };
-    },
-
-    // Advanced Confirm Modal
-    confirm(title, message, onConfirm, type = 'danger') {
-        const isDanger = type === 'danger';
-        const btnClass = isDanger ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200';
-        
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in';
-        modal.innerHTML = `
-            <div class="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 animate-slide-up border border-slate-100">
-                 <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center shadow-sm border border-slate-100">
-                    <i data-lucide="help-circle" width="32"></i>
-                </div>
-                <h3 class="text-xl font-black text-center text-slate-800 mb-2">${title}</h3>
-                <p class="text-center text-slate-500 text-sm mb-8 font-medium">${message}</p>
-                <div class="grid grid-cols-2 gap-3">
-                    <button id="ui-cancel-btn" class="py-3.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-                    <button id="ui-confirm-btn" class="py-3.5 rounded-xl font-bold text-white ${btnClass} transition shadow-lg">Confirm</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        lucide.createIcons();
-        document.getElementById('ui-cancel-btn').onclick = () => modal.remove();
-        document.getElementById('ui-confirm-btn').onclick = () => {
-            modal.remove();
-            onConfirm();
-        };
-    }
-};
-
-// ==========================================
-// 4. DATABASE SERVICE
-// ==========================================
-
-const KEYS = {
-    USERS: 'app_users',
-    SESSION: 'app_session', 
-    CONTENT: 'app_content',
-    REQUESTS: 'app_requests',
-    CHAPTERS: 'app_chapters',
-    PROGRESS: 'app_progress',
-    MESSAGES: 'app_messages',
-    COUPONS: 'app_coupons',
-    ACTIVITY: 'app_activity_logs'
-};
-
-const storage = {
-    memory: {},
-    isAvailable: false,
-    init() {
-        try { localStorage.setItem('test_storage', '1'); localStorage.removeItem('test_storage'); this.isAvailable = true; } 
-        catch(e) { this.isAvailable = false; }
-    },
-    getItem(key) { return this.isAvailable ? localStorage.getItem(key) : (this.memory[key] || null); },
-    setItem(key, value) { if(this.isAvailable) localStorage.setItem(key, value); else this.memory[key] = value; },
-    removeItem(key) { if(this.isAvailable) localStorage.removeItem(key); else delete this.memory[key]; }
-};
-storage.init();
-
-const db = {
-    _get(key, def) { try { return JSON.parse(storage.getItem(key)) || def; } catch { return def; } },
-    _save(key, val) { storage.setItem(key, JSON.stringify(val)); },
-
-    getUsers() { return this._get(KEYS.USERS, {}); },
-    getUser(email) { return this.getUsers()[email]; },
-    getUserById(id) { return Object.values(this.getUsers()).find(u => u.id === id); },
-    
-    saveUser(user) {
-        const users = this.getUsers();
-        users[user.email] = user;
-        this._save(KEYS.USERS, users);
-        const session = this.getSession();
-        if(session && session.email === user.email) this.setSession(user);
-        return user;
-    },
-
-    seedUsers() {
-        const users = this.getUsers();
-        let changed = false;
-        PRELOADED_USERS.forEach(u => {
-            if (users[u.email]) {
-                // Ensure existing users get new fields if they are missing
-                const merged = { ...u, ...users[u.email] }; // Keep user data but ensure structure
-                // Logic flip: We want to keep user edits, but add new structure fields
-                // Actually simpler: just ensure they exist.
-                if(!users[u.email].role) { users[u.email].role = u.role; changed=true; }
-            } else { users[u.email] = u; changed = true; }
-        });
-        if (changed) {
-            this._save(KEYS.USERS, users);
-        }
-    },
-
-    logActivity(userId, type, description) {
-        const logs = this._get(KEYS.ACTIVITY, []);
-        const newLog = { id: Date.now().toString(36), userId, type, description, timestamp: Date.now() };
-        logs.unshift(newLog);
-        if(logs.length > 1000) logs.length = 1000;
-        this._save(KEYS.ACTIVITY, logs);
-    },
-    getUserLogs(userId) { return this._get(KEYS.ACTIVITY, []).filter(log => log.userId === userId); },
-
-    initiateSession(email) {
-        const users = this.getUsers();
-        const user = users[email];
-        if(!user) return null;
-        user.deviceId = 'dev_' + Date.now();
-        user.lastLogin = Date.now();
-        users[email] = user;
-        this._save(KEYS.USERS, users);
-        this.setSession(user);
-        this.logActivity(user.id, 'LOGIN', 'User logged in');
-        return user;
-    },
-    
-    validateSession() {
-        const session = this.getSession();
-        if(!session) return false;
-        const user = this.getUser(session.email);
-        if(!user || user.deviceId !== session.deviceId) { this.clearSession(); return false; }
-        return true;
-    },
-    
-    getSession() { return this._get(KEYS.SESSION, null); },
-    setSession(u) { this._save(KEYS.SESSION, u); },
-    clearSession() { storage.removeItem(KEYS.SESSION); },
-
-    verifyEmail(email, code) {
-        const users = this.getUsers();
-        const user = users[email];
-        if (user && user.verificationCode === code) {
-            user.isVerified = true; delete user.verificationCode;
-            users[email] = user; this._save(KEYS.USERS, users);
-            this.logActivity(user.id, 'VERIFY', 'Email verified');
-            return { success: true };
-        }
-        return { success: false, msg: 'Invalid Code' };
-    },
-
-    getContent() { return this._get(KEYS.CONTENT, []); },
-    getContentById(id) { return this.getContent().find(c => c.id === id); },
-    saveContent(c) { const all = this.getContent(); all.unshift(c); this._save(KEYS.CONTENT, all); },
-    getChapters(batchId, subject) { return this._get(KEYS.CHAPTERS, []).filter(c => c.batchId === batchId && c.subject === subject).sort((a,b) => a.order - b.order); },
-    seedChapters(list) { const all = this._get(KEYS.CHAPTERS, []); this._save(KEYS.CHAPTERS, [...all, ...list]); },
-    hasChapters(batchId) { return this._get(KEYS.CHAPTERS, []).some(c => c.batchId === batchId); },
-
-    getCoupons() { return this._get(KEYS.COUPONS, []); },
-    saveCoupon(c) { const all = this.getCoupons(); all.push(c); this._save(KEYS.COUPONS, all); },
-    deleteCoupon(code) { let all = this.getCoupons(); all = all.filter(c => c.code !== code); this._save(KEYS.COUPONS, all); },
-    validateCoupon(code) { return this.getCoupons().find(c => c.code === code); },
-
-    getRequests() { return this._get(KEYS.REQUESTS, []); },
-    createRequest(req) { const all = this.getRequests(); all.unshift(req); this._save(KEYS.REQUESTS, all); this.logActivity(req.userId, 'PURCHASE_REQUEST', `Request for ${req.batchName}`); },
-    approveRequest(id) {
-        const reqs = this.getRequests(); const req = reqs.find(r => r.id === id);
-        if(req) {
-            req.status = 'approved'; this._save(KEYS.REQUESTS, reqs);
-            const users = this.getUsers(); const user = Object.values(users).find(u => u.id === req.userId);
-            if(user) {
-                user.enrolledBatches = user.enrolledBatches || [];
-                if(!user.enrolledBatches.includes(req.batchId)) {
-                    user.enrolledBatches.push(req.batchId); users[user.email] = user; this._save(KEYS.USERS, users);
-                    this.logActivity(user.id, 'ENROLL_SUCCESS', `Approved: ${req.batchName}`);
-                    const session = this.getSession();
-                    if(session && session.id === user.id) { session.enrolledBatches = user.enrolledBatches; this.setSession(session); if(state.user && state.user.id === user.id) state.user.enrolledBatches = user.enrolledBatches; }
-                }
-            }
-        }
-    },
-    rejectRequest(id) {
-        const reqs = this.getRequests(); const req = reqs.find(r => r.id === id);
-        if(req) { req.status = 'rejected'; this._save(KEYS.REQUESTS, reqs); this.logActivity(req.userId, 'ENROLL_REJECT', `Rejected: ${req.batchName}`); }
-    },
-
-    saveProgress(p) {
-        const map = this._get(KEYS.PROGRESS, {}); const key = `${p.userId}_${p.contentId}`;
-        let justCompleted = false;
-        if((p.watchedSeconds / p.totalSeconds) > 0.9 && !p.completed) { p.completed = true; justCompleted = true; } else if(map[key]?.completed) p.completed = true;
-        map[key] = p; this._save(KEYS.PROGRESS, map);
-        if(justCompleted) this.logActivity(p.userId, 'COMPLETION', `Completed lesson`);
-    },
-    getUserProgress(uid) { return Object.values(this._get(KEYS.PROGRESS, {})).filter(p => p.userId === uid); },
-    getMessages(u1, u2) { return this._get(KEYS.MESSAGES, []).filter(m => (m.senderId === u1 && m.receiverId === u2) || (m.senderId === u2 && m.receiverId === u1)).sort((a,b) => a.timestamp - b.timestamp); },
-    sendMessage(msg) { const all = this._get(KEYS.MESSAGES, []); all.push(msg); this._save(KEYS.MESSAGES, all); },
-    addFriend(userId, friendId) {
-        const users = this.getUsers(); const user = Object.values(users).find(u => u.id === userId); const friend = Object.values(users).find(u => u.id === friendId);
-        if(user && friend) {
-            user.friends = user.friends || []; friend.friends = friend.friends || [];
-            if(!user.friends.includes(friendId)) { user.friends.push(friendId); this.logActivity(userId, 'FRIEND', `Added friend: ${friend.name}`); }
-            if(!friend.friends.includes(userId)) friend.friends.push(userId);
-            users[user.email] = user; users[friend.email] = friend; this._save(KEYS.USERS, users);
-            const session = this.getSession(); if(session && session.id === user.id) this.setSession(user);
-        }
-    }
-};
-
-// ==========================================
-// 5. APP STATE & ROUTING
+// 1. APP STATE & ROUTING
 // ==========================================
 
 const state = {
@@ -350,11 +32,47 @@ document.addEventListener('click', e => {
     }
 });
 
+// ==========================================
+// 2. DATA SEEDING (Specific Class 8)
+// ==========================================
+
 async function seedData() {
     db.seedUsers();
+
+    // Check if Class 8 specific chapters exist. If not, seed them.
     if(!db.hasChapters('8')) {
-        const ch = []; for(let i=1; i<=5; i++) ch.push({ id:`s8_${i}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${i}: Demo Math`, order:i }); db.seedChapters(ch);
+        const mathChapters = [
+            "INTRODUCTION CLASS", "পূর্বপাঠের পুনরালোচনা", "পাই চিত্র", "মূলদ সংখ্যার ধারণা", 
+            "বহুপদী সংখ্যামালার গুণ ও ভাগ", "ঘনফল নির্ণয়", "পূরক কোণ, সম্পূরক কোণ ও সন্নিহিত কোণ",
+            "বিপ্রতীপ কোণের ধারণা", "সমান্তরাল সরলরেখা ও ছেদকের ধর্ম", "ত্রিভুজের দুটি বাহু ও তাদের বিপরীত কোণের সম্পর্ক",
+            "ত্রৈরাশিক", "শতকরা", "মিশ্রণ", "বীজগাণিতিক সংখ্যামালার উৎপাদকে বিশ্লেষণ",
+            "বীজগাণিতিক সংখ্যামালার গ.সা.গু. ও ল.সা.গু.", "বীজগাণিতিক সংখ্যামালার সরলীকরণ", "ত্রিভুজের কোণ ও বাহুর মধ্যে সম্পর্কের যাচাই",
+            "সময় ও কার্য", "লেখচিত্র", "সমীকরণ গঠন ও সমাধান", "জ্যামিতিক প্রমাণ",
+            "ত্রিভুজ অঙ্কন", "সমান্তরাল সরলরেখা অঙ্কন", "প্রদত্ত সরলরেখাংশকে সমান তিনটি, পাঁচটি ভাগে বিভক্ত করা"
+        ];
+        
+        const lifeScienceChapters = [
+            "INTRODUCTION CLASS", "প্রাদুর্ভাব, মহামারি ও অতিমারি", "জীবদেহের গঠন", "অণুজীবের জগৎ",
+            "মানুষের খাদ্য ও খাদ্য উৎপাদন", "অন্তঃক্ষরা গ্রন্থি ও বয়ঃসন্ধি", "জীববৈচিত্র্য, পরিবেশের সংকট ও বিপন্ন প্রাণী সংরক্ষণ",
+            "আমাদের চারপাশের পরিবেশ ও উদ্ভিদজগৎ"
+        ];
+
+        const phyScienceChapters = [
+            "বল ও চাপ", "স্পর্শ ছাড়া ক্রিয়াশীল বল", "তাপ", "আলো",
+            "মৌল, যৌগ ও রাসায়নিক বিক্রিয়া", "কয়েকটি গ্যাসের পরিচিতি", "প্রকৃতিতে ও জীবজগতে বিভিন্ন রূপে কার্বন যৌগের অবস্থান",
+            "প্রাকৃতিক ঘটনা ও তার বিশ্লেষণ"
+        ];
+
+        const ch = [];
+        mathChapters.forEach((title, i) => ch.push({ id:`s8_m_${i+1}`, batchId:'8', subject:'গণিত (Mathematics)', title:`Chapter ${String(i+1).padStart(2,'0')}: ${title}`, order:i+1 }));
+        lifeScienceChapters.forEach((title, i) => ch.push({ id:`s8_l_${i+1}`, batchId:'8', subject:'জীবন বিজ্ঞান (Life Science)', title:`Chapter ${String(i+1).padStart(2,'0')}: ${title}`, order:i+1 }));
+        phyScienceChapters.forEach((title, i) => ch.push({ id:`s8_p_${i+1}`, batchId:'8', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${String(i+1).padStart(2,'0')}: ${title}`, order:i+1 }));
+
+        db.seedChapters(ch);
     }
+
+    // Keep existing seed logic for other classes if needed, or clear it if you want only Class 8 strictly. 
+    // For safety, let's just ensure 9 and 10 have some demo data if empty.
     if(!db.hasChapters('9')) {
         const ch = []; for(let i=1; i<=5; i++) ch.push({ id:`s9_${i}`, batchId:'9', subject:'ভৌত বিজ্ঞান (Physical Science)', title:`Chapter ${i}: Physics Concept`, order:i }); db.seedChapters(ch);
     }
@@ -364,7 +82,7 @@ async function seedData() {
 }
 
 // ==========================================
-// 6. MAIN RENDERER & OFFLINE LOGIC
+// 3. MAIN RENDERER & OFFLINE LOGIC
 // ==========================================
 
 function renderOfflinePage() {
@@ -385,7 +103,6 @@ function renderOfflinePage() {
 function renderApp() {
     const app = document.getElementById('app');
 
-    // 1. Offline Check
     if (!navigator.onLine) {
         app.innerHTML = renderOfflinePage();
         lucide.createIcons();
@@ -394,7 +111,6 @@ function renderApp() {
     }
     window.addEventListener('offline', renderApp);
 
-    // 2. Session Check
     if(!state.checkInterval) {
         state.checkInterval = setInterval(() => {
             if(state.user && !db.validateSession()) {
@@ -424,10 +140,9 @@ function renderApp() {
 }
 
 // ==========================================
-// 7. VIEW COMPONENTS
+// 4. VIEW COMPONENTS
 // ==========================================
 
-// --- AUTH PAGE ---
 function renderAuthPage() {
     return `
     <div class="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
@@ -497,7 +212,6 @@ function attachAuthLogic() {
     };
 }
 
-// --- LAYOUT ---
 function renderLayout(content) {
     const u = state.user;
     return `
@@ -561,7 +275,6 @@ function attachLayoutLogic() {
     };
 }
 
-// --- ROUTER ---
 function renderCurrentPage() {
     switch(state.route) {
         case 'home': return pageHome();
@@ -577,7 +290,7 @@ function renderCurrentPage() {
         case 'inbox': return pageInbox();
         case 'chat': return pageChat();
         case 'profile': return pageProfile();
-        case 'edit-profile': return pageEditProfile(); // New Route
+        case 'edit-profile': return pageEditProfile();
         case 'purchases': return pagePurchases();
         case 'settings': return pageSettings();
         case 'help': return pageHelp();
@@ -594,9 +307,7 @@ function attachPageLogic() {
     if(state.route === 'edit-profile') attachEditProfileLogic();
 }
 
-// ==========================================
-// 8. INDIVIDUAL PAGES (PAGES)
-// ==========================================
+// --- PAGES ---
 
 function pageHome() {
     const u = state.user;
@@ -847,31 +558,58 @@ function pageSubjects() {
     </div>`;
 }
 
+// --- COLORFUL & DYNAMIC CHAPTER CARDS ---
 function pageChapters() {
-    const { bid, sub } = state.params; const sName = decodeURIComponent(sub); const chapters = db.getChapters(bid, sName);
+    const { bid, sub } = state.params; 
+    const sName = decodeURIComponent(sub); 
+    const chapters = db.getChapters(bid, sName);
+
     if(chapters.length === 0) { seedData().then(() => renderApp()); return '<div class="text-center mt-20"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div><p class="mt-4 text-gray-500">Loading Content...</p></div>'; }
+
     return `
     <div>
         <div class="flex items-center gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 sticky top-4 z-20">
             <button onclick="window.history.back()" class="p-2 hover:bg-gray-100 rounded-full transition"><i data-lucide="arrow-left" width="20"></i></button>
             <h1 class="text-lg font-bold truncate flex-1">${sName}</h1>
         </div>
+        
         <div class="grid gap-4">
-            ${chapters.map((ch, idx) => `
-                <div data-link="lectures" data-params='{"cid":"${ch.id}"}' class="glass p-5 rounded-2xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition relative overflow-hidden group bg-gradient-to-r from-white to-slate-50">
-                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b ${getGradient(idx)}"></div>
-                    <div class="flex justify-between items-start pl-4">
-                        <div>
-                            <div class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> Chapter ${String(idx+1).padStart(2, '0')}</div>
-                            <h3 class="font-bold text-lg text-gray-900 mt-1 group-hover:text-indigo-600 transition">${ch.title}</h3>
+            ${chapters.map((ch, idx) => {
+                const hasContent = db.hasContentForChapter(ch.id);
+                const gradient = getGradient(idx);
+                
+                return `
+                <div data-link="${hasContent ? 'lectures' : ''}" data-params='{"cid":"${ch.id}"}' 
+                     class="relative overflow-hidden p-5 rounded-2xl shadow-sm border border-gray-100 group transition-all duration-300 ${hasContent ? 'hover:shadow-lg hover:-translate-y-1 cursor-pointer bg-white' : 'opacity-80 bg-gray-50'}">
+                    
+                    <!-- Color Bar/Gradient Background Effect -->
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b ${gradient}"></div>
+                    
+                    <div class="flex items-start justify-between pl-3 relative z-10">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Chapter ${String(idx+1).padStart(2,'0')}</span>
+                                ${!hasContent ? '<span class="text-[9px] font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full animate-pulse">Coming Soon</span>' : ''}
+                            </div>
+                            <h3 class="font-bold text-lg text-slate-800 leading-tight ${hasContent ? 'group-hover:text-indigo-600' : 'text-gray-500'} transition-colors">
+                                ${ch.title.split(': ')[1] || ch.title}
+                            </h3>
                         </div>
-                        <i data-lucide="play-circle" class="text-gray-300 group-hover:text-indigo-600 transition transform group-hover:scale-110"></i>
+                        
+                        <div class="w-10 h-10 flex items-center justify-center rounded-full ${hasContent ? 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white' : 'bg-gray-100 text-gray-300'} transition-colors shadow-sm ml-3">
+                            <i data-lucide="${hasContent ? 'play-circle' : 'lock'}" width="20"></i>
+                        </div>
                     </div>
-                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs font-bold text-gray-400 pl-4">
-                         <span class="flex items-center gap-1 bg-white px-2 py-1 rounded shadow-sm"><i data-lucide="video" width="12"></i> Lectures</span>
-                    </div>
+                    
+                    ${hasContent ? `
+                    <div class="mt-3 pl-3 pt-3 border-t border-gray-50 flex items-center gap-2">
+                        <div class="flex -space-x-2">
+                            <div class="w-6 h-6 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-[8px] font-bold text-indigo-600">V</div>
+                        </div>
+                        <span class="text-xs font-bold text-gray-400">Video Lectures Available</span>
+                    </div>` : ''}
                 </div>
-            `).join('')}
+            `}).join('')}
         </div>
     </div>`;
 }
