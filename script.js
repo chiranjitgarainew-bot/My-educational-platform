@@ -17,6 +17,12 @@ const state = {
 };
 
 function navigate(route, params = {}) {
+    // ROUTE GUARD: Check Admin Access
+    if (route.startsWith('admin') && state.user && state.user.role !== 'admin') {
+        UI.alert('Access Denied', 'You do not have permission to view this page.', 'error');
+        return;
+    }
+
     state.route = route;
     state.params = params;
     // Reset temporary states when leaving payment

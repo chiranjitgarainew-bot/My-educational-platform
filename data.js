@@ -186,6 +186,11 @@ const db = {
         const user = this.getUser(email);
         if (!user) return { success: false, msg: 'Account not found.' };
 
+        // Check Suspension
+        if (user.isSuspended) {
+            return { success: false, msg: 'Account Suspended. Contact Admin.' };
+        }
+
         // Handle verify logic
         if (!user.passwordHash || !user.salt) {
              // Fallback for very old unmigrated data (shouldn't happen with new seed)
@@ -203,19 +208,38 @@ const db = {
         }
     },
 
+    // Admin: Suspend User
+    toggleUserSuspension(email) {
+        const users = this.getUsers();
+        if(users[email]) {
+            users[email].isSuspended = !users[email].isSuspended;
+            this._save(KEYS.USERS, users);
+            // Clear session if user is suspended
+            if(users[email].isSuspended) {
+                 const currentSession = this.getSession();
+                 if(currentSession && currentSession.email === email) this.clearSession();
+            }
+            const action = users[email].isSuspended ? 'SUSPEND' : 'UNSUSPEND';
+            this.logActivity('ADMIN', action, `User ${users[email].name} ${action.toLowerCase()}ed`);
+        }
+    },
+
     logActivity(userId, type, description) {
         const logs = this._get(KEYS.ACTIVITY, []);
         const newLog = { id: Date.now().toString(36), userId, type, description, timestamp: Date.now() };
         logs.unshift(newLog);
-        if(logs.length > 1000) logs.length = 1000;
+        if(logs.length > 2000) logs.length = 2000;
         this._save(KEYS.ACTIVITY, logs);
     },
     getUserLogs(userId) { return this._get(KEYS.ACTIVITY, []).filter(log => log.userId === userId); },
+    getAllLogs() { return this._get(KEYS.ACTIVITY, []); },
 
     initiateSession(email) {
         const users = this.getUsers();
         const user = users[email];
         if(!user) return null;
+        if(user.isSuspended) return null; 
+
         user.deviceId = 'dev_' + Date.now();
         user.lastLogin = Date.now();
         users[email] = user;
@@ -229,7 +253,7 @@ const db = {
         const session = this.getSession();
         if(!session) return false;
         const user = this.getUser(session.email);
-        if(!user || user.deviceId !== session.deviceId) { this.clearSession(); return false; }
+        if(!user || user.deviceId !== session.deviceId || user.isSuspended) { this.clearSession(); return false; }
         return true;
     },
     
@@ -251,7 +275,16 @@ const db = {
 
     getContent() { return this._get(KEYS.CONTENT, []); },
     getContentById(id) { return this.getContent().find(c => c.id === id); },
-    saveContent(c) { const all = this.getContent(); all.unshift(c); this._save(KEYS.CONTENT, all); },
+    saveContent(c) { const all = this.getContent(); all.unshift(c); this._save(KEYS.CONTENT, all); this.logActivity('ADMIN', 'CONTENT_ADD', `Added: ${c.title}`); },
+    deleteContent(id) {
+        let all = this.getContent();
+        const item = all.find(c => c.id === id);
+        if(item) {
+            all = all.filter(c => c.id !== id);
+            this._save(KEYS.CONTENT, all);
+            this.logActivity('ADMIN', 'CONTENT_DEL', `Deleted: ${item.title}`);
+        }
+    },
     getChapters(batchId, subject) { return this._get(KEYS.CHAPTERS, []).filter(c => c.batchId === batchId && c.subject === subject).sort((a,b) => a.order - b.order); },
     seedChapters(list) { const all = this._get(KEYS.CHAPTERS, []); this._save(KEYS.CHAPTERS, [...all, ...list]); },
     hasChapters(batchId) { return this._get(KEYS.CHAPTERS, []).some(c => c.batchId === batchId); },
@@ -260,22 +293,58 @@ const db = {
     },
 
     getCoupons() { return this._get(KEYS.COUPONS, []); },
-    saveCoupon(c) { const all = this.getCoupons(); all.push(c); this._save(KEYS.COUPONS, all); },
-    deleteCoupon(code) { let all = this.getCoupons(); all = all.filter(c => c.code !== code); this._save(KEYS.COUPONS, all); },
-    validateCoupon(code) { return this.getCoupons().find(c => c.code === code); },
+    saveCoupon(c) { 
+        const all = this.getCoupons(); 
+        all.push(c); 
+        this._save(KEYS.COUPONS, all); 
+        this.logActivity('ADMIN', 'COUPON_CREATE', `Created coupon: ${c.code}`);
+    },
+    deleteCoupon(code) { 
+        let all = this.getCoupons(); 
+        all = all.filter(c => c.code !== code); 
+        this._save(KEYS.COUPONS, all); 
+        this.logActivity('ADMIN', 'COUPON_DELETE', `Deleted coupon: ${code}`);
+    },
+    validateCoupon(code, purchaseAmount = 0) { 
+        const c = this.getCoupons().find(c => c.code === code);
+        if (!c) return null;
+        
+        // Check Expiry
+        if (c.expiry && new Date(c.expiry).getTime() < Date.now()) return null;
+        
+        // Check Min Purchase
+        if (c.minAmount && purchaseAmount < c.minAmount) return null;
+
+        // Check Usage Limits
+        if (c.maxUsage && c.usageCount >= c.maxUsage) return null;
+
+        return c; 
+    },
+    incrementCouponUsage(code) {
+        const coupons = this.getCoupons();
+        const idx = coupons.findIndex(c => c.code === code);
+        if(idx !== -1) {
+            coupons[idx].usageCount = (coupons[idx].usageCount || 0) + 1;
+            this._save(KEYS.COUPONS, coupons);
+        }
+    },
 
     getRequests() { return this._get(KEYS.REQUESTS, []); },
     createRequest(req) { const all = this.getRequests(); all.unshift(req); this._save(KEYS.REQUESTS, all); this.logActivity(req.userId, 'PURCHASE_REQUEST', `Request for ${req.batchName}`); },
+    
     approveRequest(id) {
         const reqs = this.getRequests(); const req = reqs.find(r => r.id === id);
-        if(req) {
-            req.status = 'approved'; this._save(KEYS.REQUESTS, reqs);
+        if(req && req.status === 'pending') {
+            req.status = 'approved'; 
+            this._save(KEYS.REQUESTS, reqs);
             const users = this.getUsers(); const user = Object.values(users).find(u => u.id === req.userId);
             if(user) {
                 user.enrolledBatches = user.enrolledBatches || [];
                 if(!user.enrolledBatches.includes(req.batchId)) {
-                    user.enrolledBatches.push(req.batchId); users[user.email] = user; this._save(KEYS.USERS, users);
-                    this.logActivity(user.id, 'ENROLL_SUCCESS', `Approved: ${req.batchName}`);
+                    user.enrolledBatches.push(req.batchId); 
+                    users[user.email] = user; 
+                    this._save(KEYS.USERS, users);
+                    this.logActivity('ADMIN', 'APPROVE_PAY', `Enrolled ${user.name} to ${req.batchName}`);
                     const session = this.getSession();
                     if(session && session.id === user.id) { session.enrolledBatches = user.enrolledBatches; this.setSession(session); if(state && state.user && state.user.id === user.id) state.user.enrolledBatches = user.enrolledBatches; }
                 }
@@ -284,7 +353,11 @@ const db = {
     },
     rejectRequest(id) {
         const reqs = this.getRequests(); const req = reqs.find(r => r.id === id);
-        if(req) { req.status = 'rejected'; this._save(KEYS.REQUESTS, reqs); this.logActivity(req.userId, 'ENROLL_REJECT', `Rejected: ${req.batchName}`); }
+        if(req) { 
+            req.status = 'rejected'; 
+            this._save(KEYS.REQUESTS, reqs); 
+            this.logActivity('ADMIN', 'REJECT_PAY', `Rejected request for ${req.batchName}`); 
+        }
     },
 
     saveProgress(p) {

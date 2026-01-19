@@ -150,14 +150,17 @@ function pagePayment() {
 function attachPaymentLogic() {
     window.applyCoupon = () => {
         const code = document.getElementById('coupon-code').value.toUpperCase().trim();
+        const b = BATCHES.find(x => x.id === state.params.id);
+        
         if(!code) return UI.alert('Oops!', 'Please enter a coupon code', 'error');
-        const coupon = db.validateCoupon(code);
+        const coupon = db.validateCoupon(code, b.price);
+        
         if(coupon) {
             state.tempPayment = { couponApplied: code, discountAmount: parseInt(coupon.amount) };
             renderApp();
             UI.alert('Savings Unlocked!', `Coupon Applied! You saved ₹${coupon.amount}`, 'success');
         } else {
-            UI.alert('Invalid Coupon', 'This coupon code is not valid.', 'error');
+            UI.alert('Invalid Coupon', 'Code is invalid, expired, or limit reached.', 'error');
         }
     };
     window.removeCoupon = () => { state.tempPayment = { couponApplied: null, discountAmount: 0 }; renderApp(); };
@@ -180,6 +183,8 @@ function attachPaymentLogic() {
             method: 'PhonePe Gateway'
         });
 
+        if(state.tempPayment.couponApplied) db.incrementCouponUsage(state.tempPayment.couponApplied);
+
         const upiLink = `upi://pay?pa=9732140742@ybl&pn=StudyPlatform&am=${finalPrice}&cu=INR`;
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         
@@ -200,6 +205,7 @@ function attachPaymentLogic() {
         const b = BATCHES.find(x => x.id === state.params.id);
         const discount = state.tempPayment.discountAmount || 0;
         const finalPrice = Math.max(0, b.price - discount);
+        
         db.createRequest({
             id: Date.now().toString(),
             userId: state.user.id,
@@ -212,6 +218,9 @@ function attachPaymentLogic() {
             status: 'pending',
             method: 'Manual UPI'
         });
+        
+        if(state.tempPayment.couponApplied) db.incrementCouponUsage(state.tempPayment.couponApplied);
+        
         UI.alert('Payment Request Received', 'We have received your manual payment request. Please allow some time for verification.', 'info');
         navigate('profile');
     };
@@ -570,69 +579,312 @@ function attachPlayerLogic() {
     }
 }
 
-// --- ADMIN & OTHER PAGES ---
+// --- NEW ADMIN DASHBOARD (ADVANCED) ---
 
 function pageAdmin() {
-    if(state.user.role !== 'admin') return '<div class="p-10 text-center text-red-500">Access Denied</div>';
-    const reqs = db.getRequests(); const coupons = db.getCoupons(); const users = Object.values(db.getUsers()); const tab = state.params.tab || 'requests';
-    const totalUsers = users.length; const totalRevenue = reqs.filter(r => r.status === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const tab = state.params.tab || 'dashboard';
+    
+    // Sidebar items
+    const tabs = [
+        { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+        { id: 'users', icon: 'users', label: 'Users' },
+        { id: 'payments', icon: 'credit-card', label: 'Payments' },
+        { id: 'content', icon: 'video', label: 'Content' },
+        { id: 'coupons', icon: 'ticket', label: 'Coupons' },
+        { id: 'logs', icon: 'activity', label: 'Logs' },
+    ];
+
+    // Helper to render content based on tab
+    const renderContent = () => {
+        switch(tab) {
+            case 'dashboard': return adminDashboardView();
+            case 'users': return adminUsersView();
+            case 'payments': return adminPaymentsView();
+            case 'content': return adminContentView();
+            case 'coupons': return adminCouponsView();
+            case 'logs': return adminLogsView();
+            default: return adminDashboardView();
+        }
+    };
+
     return `
-    <div class="mb-6">
-        <h2 class="text-2xl font-bold mb-4">Admin Dashboard</h2>
-        <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 rounded-2xl text-white shadow-lg shadow-indigo-200"><div class="text-xs font-bold uppercase opacity-80 mb-1">Total Students</div><div class="text-3xl font-black">${totalUsers}</div></div>
-            <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200"><div class="text-xs font-bold uppercase opacity-80 mb-1">Total Revenue</div><div class="text-3xl font-black">₹${totalRevenue.toLocaleString()}</div></div>
+    <div class="min-h-[80vh] flex flex-col md:flex-row gap-4">
+        <!-- Admin Sidebar (Mobile horizontal, Desktop vertical) -->
+        <div class="bg-white p-2 md:p-4 rounded-2xl shadow-sm border border-gray-100 flex md:flex-col gap-2 overflow-x-auto md:w-48 sticky top-20 z-10 h-fit">
+            ${tabs.map(t => `
+                <button onclick="navigate('admin', {tab: '${t.id}'})" 
+                    class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition whitespace-nowrap
+                    ${tab === t.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-600 hover:bg-slate-50'}">
+                    <i data-lucide="${t.icon}" width="18"></i>
+                    ${t.label}
+                </button>
+            `).join('')}
         </div>
-        <div class="flex justify-between items-center mb-4">
-            <div class="flex p-1 bg-white border border-gray-200 rounded-xl overflow-x-auto no-scrollbar">
-                <button onclick="navigate('admin', {tab:'requests'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='requests' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Requests</button>
-                <button onclick="navigate('admin', {tab:'coupons'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='coupons' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Coupons</button>
-                <button onclick="navigate('admin', {tab:'users'})" class="px-4 py-2 text-sm font-bold rounded-lg transition whitespace-nowrap ${tab==='users' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}">Users</button>
-            </div>
-            <button data-link="admin-upload" class="bg-indigo-600 text-white p-2 rounded-lg shadow-md hover:bg-indigo-700 ml-2"><i data-lucide="upload" class="w-5 h-5"></i></button>
+
+        <!-- Admin Content Area -->
+        <div class="flex-1 space-y-4">
+             ${tab !== 'dashboard' ? `<h2 class="text-xl font-black text-slate-800 capitalize mb-4 px-2">${tab} Management</h2>` : ''}
+             ${renderContent()}
         </div>
-    </div>
-    ${tab === 'requests' ? `
-        <div class="space-y-4">
-            <div class="p-4 bg-orange-50 border border-orange-100 rounded-xl font-bold text-orange-700 flex justify-between items-center shadow-sm"><span>Pending Approvals</span><span class="bg-orange-500 text-white px-2 py-1 rounded text-xs">${reqs.filter(r=>r.status==='pending').length}</span></div>
-            <div class="space-y-3">
-                ${reqs.filter(r => r.status === 'pending').map(r => `
-                    <div class="p-5 bg-white border-l-4 border-orange-400 rounded-xl shadow-sm flex flex-col gap-3">
-                        <div class="flex justify-between items-start"><div><div class="font-bold text-slate-800 text-lg">${r.userName}</div><div class="text-sm text-gray-500 font-medium">${r.batchName}</div></div><span class="text-lg font-black text-slate-700">₹${r.amount}</span></div>
-                        <div class="flex justify-between items-center border-t border-gray-100 pt-3">
-                            <div class="text-xs text-gray-400 font-bold bg-gray-50 px-2 py-1 rounded uppercase">${r.method || 'Manual'}</div>
-                            <div class="flex gap-2"><button onclick="approvePay('${r.id}')" class="px-4 py-2 bg-green-500 text-white rounded-lg font-bold text-xs hover:bg-green-600 shadow-sm flex items-center gap-1"><i data-lucide="check" width="14"></i> Approve</button><button onclick="rejectPay('${r.id}')" class="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold text-xs hover:bg-red-200">Reject</button></div>
-                        </div>
-                    </div>`).join('')}
-                ${reqs.filter(r => r.status === 'pending').length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">No pending requests found.</div>' : ''}
-            </div>
-        </div>
-    ` : tab === 'users' ? `
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"><div class="divide-y divide-gray-100">
-                ${users.map(u => `<div class="p-4 flex items-center gap-3 hover:bg-gray-50 transition"><img src="${u.avatar}" class="w-10 h-10 rounded-full bg-gray-200 border border-gray-300"><div class="flex-1"><div class="font-bold text-slate-800 text-sm">${u.name} ${u.role==='admin'?'<span class="text-indigo-600">(Admin)</span>':''}</div><div class="text-xs text-gray-500">${u.email}</div></div><div class="text-xs font-bold px-2 py-1 rounded ${u.isVerified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${u.isVerified ? 'Verified' : 'Pending'}</div></div>`).join('')}
-            </div></div>
-    ` : `
-        <div class="space-y-6">
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><h3 class="font-bold text-gray-700 mb-3">Create Coupon</h3><form id="create-coupon-form" class="flex gap-2"><input type="text" id="new-code" placeholder="Code" required class="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm uppercase font-bold outline-none"><input type="number" id="new-amount" placeholder="₹" required class="w-20 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none"><button type="submit" class="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-sm">Add</button></form></div>
-            <div class="space-y-3">${coupons.map(c => `<div class="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex justify-between items-center"><div class="flex items-center gap-3"><div class="bg-green-100 p-2 rounded-lg text-green-600"><i data-lucide="tag" width="20"></i></div><div><div class="font-black text-slate-800 tracking-wider">${c.code}</div><div class="text-xs text-green-600 font-bold">Flat ₹${c.amount} OFF</div></div></div><button onclick="deleteCoupon('${c.code}')" class="text-gray-400 p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition"><i data-lucide="trash-2" width="16"></i></button></div>`).join('')}${coupons.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No active coupons.</div>' : ''}</div>
-        </div>
-    `}`;
+    </div>`;
 }
+
+// -- Sub-Views for Admin --
+
+function adminDashboardView() {
+    const reqs = db.getRequests(); 
+    const users = Object.values(db.getUsers()); 
+    const totalRevenue = reqs.filter(r => r.status === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const pendingReqs = reqs.filter(r => r.status === 'pending').length;
+
+    return `
+    <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+            <h2 class="text-2xl font-black mb-1">Admin Panel</h2>
+            <p class="text-indigo-100 text-sm">Welcome back, Admin. Here is your overview.</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Total Users</div>
+            <div class="text-3xl font-black text-slate-800">${users.length}</div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Revenue</div>
+            <div class="text-3xl font-black text-slate-800">₹${totalRevenue}</div>
+        </div>
+        <div class="col-span-2 bg-orange-50 p-5 rounded-2xl border border-orange-100 flex justify-between items-center cursor-pointer hover:bg-orange-100 transition" onclick="navigate('admin', {tab: 'payments'})">
+            <div>
+                <div class="text-orange-600 text-xs font-bold uppercase tracking-wider mb-1">Pending Requests</div>
+                <div class="text-2xl font-black text-orange-700">${pendingReqs}</div>
+            </div>
+            <div class="bg-orange-200 text-orange-700 p-2 rounded-full"><i data-lucide="arrow-right"></i></div>
+        </div>
+    </div>`;
+}
+
+function adminUsersView() {
+    const users = Object.values(db.getUsers());
+    const term = (state.params.search || '').toLowerCase();
+    const filtered = users.filter(u => u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term));
+
+    return `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="p-4 border-b border-gray-100 flex gap-2">
+            <input type="text" id="user-search" value="${state.params.search || ''}" placeholder="Search by name or email..." 
+                class="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-100">
+            <button onclick="navigate('admin', {tab:'users', search: document.getElementById('user-search').value})" 
+                class="bg-slate-800 text-white px-4 rounded-lg font-bold text-sm">Search</button>
+        </div>
+        <div class="divide-y divide-gray-50 max-h-[60vh] overflow-y-auto">
+            ${filtered.map(u => `
+                <div class="p-4 flex items-center gap-3 hover:bg-gray-50 transition">
+                    <img src="${u.avatar}" class="w-10 h-10 rounded-full bg-gray-200 border border-gray-300">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 text-sm truncate">${u.name}</span>
+                            ${u.role === 'admin' ? '<span class="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded">ADMIN</span>' : '<span class="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 rounded">STUDENT</span>'}
+                        </div>
+                        <div class="text-xs text-gray-500 truncate">${u.email}</div>
+                    </div>
+                    ${u.role !== 'admin' ? `
+                        <button onclick="toggleSuspend('${u.email}')" 
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold border transition ${u.isSuspended ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-slate-600 border-gray-200 hover:bg-gray-100'}">
+                            ${u.isSuspended ? 'Suspended' : 'Suspend'}
+                        </button>
+                    ` : ''}
+                </div>
+            `).join('')}
+            ${filtered.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm">No users found.</div>' : ''}
+        </div>
+    </div>`;
+}
+
+function adminPaymentsView() {
+    const reqs = db.getRequests();
+    const filter = state.params.filter || 'pending';
+    const filtered = reqs.filter(r => filter === 'all' ? true : r.status === filter);
+
+    return `
+    <div>
+        <div class="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
+            <button onclick="navigate('admin', {tab:'payments', filter:'pending'})" class="px-4 py-2 rounded-lg text-xs font-bold border transition ${filter==='pending' ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-gray-200'}">Pending</button>
+            <button onclick="navigate('admin', {tab:'payments', filter:'approved'})" class="px-4 py-2 rounded-lg text-xs font-bold border transition ${filter==='approved' ? 'bg-green-500 text-white border-green-600' : 'bg-white text-gray-500 border-gray-200'}">Approved</button>
+            <button onclick="navigate('admin', {tab:'payments', filter:'rejected'})" class="px-4 py-2 rounded-lg text-xs font-bold border transition ${filter==='rejected' ? 'bg-red-500 text-white border-red-600' : 'bg-white text-gray-500 border-gray-200'}">Rejected</button>
+            <button onclick="navigate('admin', {tab:'payments', filter:'all'})" class="px-4 py-2 rounded-lg text-xs font-bold border transition ${filter==='all' ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-gray-500 border-gray-200'}">All</button>
+        </div>
+        
+        <div class="space-y-3">
+            ${filtered.map(r => `
+                <div class="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col gap-3 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full ${r.status==='pending'?'bg-orange-400':r.status==='approved'?'bg-green-500':'bg-red-500'}"></div>
+                    <div class="flex justify-between items-start pl-3">
+                        <div>
+                            <div class="font-bold text-slate-800">${r.userName}</div>
+                            <div class="text-xs text-gray-500">${r.userEmail}</div>
+                            <div class="text-xs font-bold text-indigo-600 mt-1">${r.batchName}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-black text-slate-800">₹${r.amount}</div>
+                            <div class="text-[10px] text-gray-400 uppercase font-bold">${r.method}</div>
+                        </div>
+                    </div>
+                    ${r.status === 'pending' ? `
+                    <div class="flex gap-2 pl-3 pt-2 border-t border-gray-50">
+                        <button onclick="approvePay('${r.id}')" class="flex-1 bg-green-50 text-green-700 py-2 rounded-lg text-xs font-bold hover:bg-green-100">Approve</button>
+                        <button onclick="rejectPay('${r.id}')" class="flex-1 bg-red-50 text-red-700 py-2 rounded-lg text-xs font-bold hover:bg-red-100">Reject</button>
+                    </div>` : `
+                    <div class="pl-3 text-[10px] font-bold uppercase tracking-wider ${r.status==='approved'?'text-green-600':'text-red-600'}">
+                        Status: ${r.status}
+                    </div>`}
+                </div>
+            `).join('')}
+            ${filtered.length === 0 ? '<div class="p-10 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">No records found.</div>' : ''}
+        </div>
+    </div>`;
+}
+
+function adminContentView() {
+    const chapters = db._get(KEYS.CHAPTERS, []);
+    const content = db.getContent();
+    const filterCid = state.params.cid || 'all';
+    
+    const filteredContent = filterCid === 'all' ? content : content.filter(c => c.chapterId === filterCid);
+
+    return `
+    <div>
+        <div class="flex justify-between mb-4">
+             <select onchange="navigate('admin', {tab:'content', cid: this.value})" class="bg-white border border-gray-200 text-sm rounded-lg p-2.5 outline-none max-w-[200px]">
+                <option value="all">All Chapters</option>
+                ${chapters.map(c => `<option value="${c.id}" ${filterCid===c.id?'selected':''}>${c.title}</option>`).join('')}
+            </select>
+            <button data-link="admin-upload" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><i data-lucide="plus" width="16"></i> Upload</button>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+            ${filteredContent.map(c => `
+                <div class="p-4 flex gap-4 hover:bg-gray-50 group">
+                    <div class="w-16 h-10 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+                        <img src="${c.thumbnail || ''}" class="w-full h-full object-cover opacity-80">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-slate-800 text-sm truncate">${c.title}</div>
+                        <div class="text-xs text-gray-400 truncate">${c.type} &bull; ${c.id}</div>
+                    </div>
+                    <button onclick="deleteContent('${c.id}')" class="text-gray-300 hover:text-red-500 transition px-2"><i data-lucide="trash-2" width="16"></i></button>
+                </div>
+            `).join('')}
+            ${filteredContent.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm">No content uploaded.</div>' : ''}
+        </div>
+    </div>`;
+}
+
+function adminCouponsView() {
+    const coupons = db.getCoupons();
+    return `
+    <div class="space-y-6">
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <h3 class="font-bold text-gray-800 mb-3 text-sm">Create New Coupon</h3>
+            <form id="create-coupon-form" class="space-y-3">
+                <div class="flex gap-2">
+                    <input type="text" id="c-code" placeholder="CODE (e.g. SAVE50)" required class="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold uppercase outline-none">
+                    <input type="number" id="c-amount" placeholder="Amount (₹)" required class="w-24 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                     <input type="date" id="c-expiry" class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold outline-none text-gray-500">
+                     <input type="number" id="c-limit" placeholder="Max Usage Limit" class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold outline-none">
+                </div>
+                <button type="submit" class="w-full bg-slate-800 text-white px-4 py-2.5 rounded-lg font-bold text-sm hover:bg-slate-900 transition">Create Coupon</button>
+            </form>
+        </div>
+
+        <div class="space-y-3">
+            ${coupons.map(c => {
+                const isExpired = c.expiry && new Date(c.expiry).getTime() < Date.now();
+                return `
+                <div class="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex justify-between items-center ${isExpired ? 'opacity-60' : ''}">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-green-100 p-2.5 rounded-lg text-green-600"><i data-lucide="tag" width="18"></i></div>
+                        <div>
+                            <div class="font-black text-slate-800 tracking-wider flex items-center gap-2">
+                                ${c.code}
+                                ${isExpired ? '<span class="text-[9px] bg-red-100 text-red-600 px-1 rounded">EXPIRED</span>' : ''}
+                            </div>
+                            <div class="text-xs text-gray-500 font-medium">
+                                ₹${c.amount} Off &bull; Used: ${c.usageCount||0}/${c.maxUsage || '∞'}
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="deleteCoupon('${c.code}')" class="text-gray-400 p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition"><i data-lucide="trash-2" width="16"></i></button>
+                </div>`;
+            }).join('')}
+             ${coupons.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No active coupons.</div>' : ''}
+        </div>
+    </div>`;
+}
+
+function adminLogsView() {
+    const logs = db.getAllLogs();
+    return `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="bg-gray-50 px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Activity Timeline</div>
+        <div class="divide-y divide-gray-50 max-h-[60vh] overflow-y-auto">
+            ${logs.map(log => `
+                <div class="p-4 flex gap-3 text-sm">
+                    <div class="min-w-[60px] text-xs text-gray-400 font-mono text-right pt-0.5">${new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    <div>
+                        <div class="font-bold text-slate-700 text-xs uppercase tracking-wide mb-0.5">${log.type}</div>
+                        <div class="text-gray-600">${log.description}</div>
+                        <div class="text-[10px] text-gray-400 mt-1">ID: ${log.userId}</div>
+                    </div>
+                </div>
+            `).join('')}
+            ${logs.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm">No activity recorded.</div>' : ''}
+        </div>
+    </div>`;
+}
+
+// --- Attach Logic ---
+
 function attachAdminLogic() {
-    window.approvePay = (id) => UI.confirm('Approve Request?', 'Are you sure you want to grant access to this student?', () => { 
-        db.approveRequest(id); 
-        renderApp();
-        setTimeout(() => UI.alert('Approved!', 'The student has been successfully enrolled.', 'success'), 300);
+    // User Management
+    window.toggleSuspend = (email) => {
+        UI.confirm('Change Status?', 'Are you sure you want to suspend/unsuspend this user?', () => {
+            db.toggleUserSuspension(email);
+            renderApp();
+        }, 'warning');
+    };
+
+    // Payments
+    window.approvePay = (id) => UI.confirm('Approve Request?', 'Grant access to student?', () => { 
+        db.approveRequest(id); renderApp(); 
     }, 'success');
     
-    window.rejectPay = (id) => UI.confirm('Reject Request?', 'This action cannot be undone. Are you sure?', () => { 
-        db.rejectRequest(id); 
-        renderApp(); 
+    window.rejectPay = (id) => UI.confirm('Reject Request?', 'Action cannot be undone.', () => { 
+        db.rejectRequest(id); renderApp(); 
     }, 'danger');
     
-    const form = document.getElementById('create-coupon-form');
-    if(form) form.onsubmit = (e) => { e.preventDefault(); const code = document.getElementById('new-code').value.toUpperCase().trim(); const amount = document.getElementById('new-amount').value; db.saveCoupon({ code, amount }); renderApp(); };
-    window.deleteCoupon = (code) => UI.confirm('Delete Coupon?', 'Cannot be undone.', () => { db.deleteCoupon(code); renderApp(); }, 'danger');
+    // Coupons
+    const cForm = document.getElementById('create-coupon-form');
+    if(cForm) cForm.onsubmit = (e) => {
+        e.preventDefault();
+        const code = document.getElementById('c-code').value.toUpperCase().trim();
+        const amount = document.getElementById('c-amount').value;
+        const expiry = document.getElementById('c-expiry').value;
+        const limit = document.getElementById('c-limit').value;
+
+        db.saveCoupon({ 
+            code, 
+            amount, 
+            expiry, 
+            maxUsage: limit ? parseInt(limit) : null,
+            usageCount: 0 
+        });
+        renderApp();
+        UI.alert('Success', 'Coupon created successfully.', 'success');
+    };
+    window.deleteCoupon = (code) => UI.confirm('Delete Coupon?', 'This action is permanent.', () => { db.deleteCoupon(code); renderApp(); }, 'danger');
+
+    // Content
+    window.deleteContent = (id) => UI.confirm('Delete Content?', 'This video will be removed permanently.', () => { db.deleteContent(id); renderApp(); }, 'danger');
 }
 
 function pageAdminUpload() {
@@ -690,7 +942,7 @@ function attachAdminUploadLogic() {
     const demoBtn = document.getElementById('use-demo-btn');
     const urlInput = document.getElementById('vid-url');
     
-    demoBtn.onclick = () => {
+    if(demoBtn) demoBtn.onclick = () => {
         // Sample Big Buck Bunny mp4
         urlInput.value = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
         document.getElementById('vid-title').value = "Demo Video: Big Buck Bunny";
@@ -710,7 +962,7 @@ function attachAdminUploadLogic() {
         
         db.saveContent({ id: Date.now().toString(), batchId: chapter.batchId, chapterId: chId, title, description: desc, videoUrl: url, thumbnail: thumb, duration: 600, type: 'video' });
         UI.alert('Success', 'Video uploaded successfully!', 'success'); 
-        navigate('lectures', {cid: chId});
+        navigate('admin', {tab: 'content'}); // Redirect back to content list
     };
 }
 
